@@ -127,6 +127,9 @@ class JaxTape:
             self.output_trees = [p[1] for p in out_trees_and_tracers]
             jaxpr, const_vals = self.frame.to_jaxpr([self.trace.full_raise(p) for p in flat_params])
             self.closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, const_vals)
+            print(f"Classical JAXPR:\n{self.closed_jaxpr}\n")
+            print(f"Num of output trees: {self.output_trees}\n")
+            print(f"Num of params+retvals: {len(flat_params)}\n")
 
         # tear down jax tracing logic
         self.trace = None
