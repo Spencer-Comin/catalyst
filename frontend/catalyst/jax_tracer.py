@@ -21,6 +21,7 @@ from jax._src.dispatch import jaxpr_replicas
 from jax._src.interpreters.mlir import _module_name_regex
 from jax._src.lax.lax import xb, xla
 from jax._src.util import wrap_name
+from jax._src.core import find_top_trace
 from jax.interpreters.mlir import (
     AxisContext,
     ModuleContext,
@@ -262,8 +263,11 @@ def trace_quantum_tape(
         meas_ret_val_indices = []
     qubit_states = {}
     p = tape.get_parameter_evaluator()
+    print("TRACING QUANTUM TAPE")
+    print(f"========")
     for op in tape.quantum_tape.operations:
         op_args = p.get_partial_return_value()
+        trace = find_top_trace(op_args[0])
         if op.__class__.__name__ == "MidCircuitMeasure":
             # if mid circuit measurement, there are no parameters.
             # send the result to the ParamEvaluator
@@ -337,6 +341,9 @@ def trace_quantum_tape(
             qubit_states, qreg = get_new_qubit_state_from_wires_and_qubits(
                 op_wires, new_qubits, qubit_states, qreg
             )
+        print(f"AFTER {op}")
+        print('\n'.join([str(e) for e in trace.frame.eqns]))
+        print(f"========")
 
     meas_return_values = []
     if len(meas_ret_val_indices) > 0:

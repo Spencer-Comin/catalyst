@@ -20,6 +20,7 @@ import jax
 import pennylane as qml
 from jax.interpreters.partial_eval import (
     DynamicJaxprTrace,
+    DynamicJaxprTracer,
     JaxprStackFrame,
     extend_jaxpr_stack,
 )
@@ -128,14 +129,14 @@ class JaxTape:
             jaxpr, const_vals = self.frame.to_jaxpr([self.trace.full_raise(p) for p in flat_params])
             self.closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, const_vals)
             print(f"Classical JAXPR:\n{self.closed_jaxpr}\n")
-            print(f"Num of output trees: {self.output_trees}\n")
-            print(f"Num of params+retvals: {len(flat_params)}\n")
+            print(f"Output tree leaves ({len(self.output_trees)}): {[t.num_leaves for t in self.output_trees]}\n")
+            print(f"Params+return tracers ({len(flat_params)}): {['T' if isinstance(t,DynamicJaxprTracer) else t for t in flat_params]}\n")
 
         # tear down jax tracing logic
         self.trace = None
         self.extended_frame_cm.__exit__(e_type, e_value, traceback)
         self.extended_frame_cm = None
-        self.frame = None
+        # self.frame = None
         self.main_cm.__exit__(e_type, e_value, traceback)
         self.main_cm = None
 
