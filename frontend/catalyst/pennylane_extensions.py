@@ -121,6 +121,7 @@ class QFunc:
         update_wrapper(self, fn)
 
     def __call__(self, *args, **kwargs):
+        qnode = self
         if isinstance(self, qml.QNode):
             if isinstance(self.device, qml.Device):
                 name = self.device.short_name
@@ -142,14 +143,14 @@ class QFunc:
                     backend_kwargs["s3_destination_folder"] = str(self.device._s3_folder)
 
             device = QJITDevice(
-                self.device.shots, self.device.wires, self.device.short_name, backend_kwargs
+                self.device.shots, self.device.wires, self.device.short_name, backend_kwargs 
             )
         else:
             # Allow QFunc to still be used by itself for internal testing.
             device = self.device
 
         with EvaluationContext(EvaluationMode.QUANTUM_COMPILATION):
-            jaxpr, shape = trace_quantum_function(self.func, device, args, kwargs)
+            jaxpr, shape = trace_quantum_function(self.func, device, args, kwargs, qnode)
 
         retval_tree = tree_structure(shape)
 
