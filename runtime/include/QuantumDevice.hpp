@@ -44,6 +44,10 @@ struct QuantumDevice {
     QuantumDevice(QuantumDevice &&) = delete;
     QuantumDevice &operator=(QuantumDevice &&) = delete;
 
+    virtual std::string getName(void) {
+       return "unnamed-device";
+    }
+
     /**
      * @brief Allocate a qubit.
      *
