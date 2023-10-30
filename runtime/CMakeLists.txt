@@ -20,7 +20,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(runtime_includes "${PROJECT_SOURCE_DIR}/include")
 set(capi_utils_includes "${PROJECT_SOURCE_DIR}/lib/capi")
-set(extensions_includes "${PROJECT_SOURCE_DIR}/extensions")
+set(runtime_backend_dir "${PROJECT_SOURCE_DIR}/lib/backend")
+set(lightning_dynamic_includes "${runtime_backend_dir}/lightning/lightning_dynamic")
 set(backend_includes "${PROJECT_SOURCE_DIR}/lib/backend/common")
 
 set(QIRSTDLIB_VERSION "0.4.0")
@@ -110,7 +111,6 @@ if(ENABLE_SANITIZER)
     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
 ENDIF()
 
-add_subdirectory(extensions)
 add_subdirectory(lib)
 
 add_subdirectory(tests)

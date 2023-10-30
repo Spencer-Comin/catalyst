@@ -67,7 +67,6 @@ target_link_libraries(runner_tests PRIVATE pybind11::embed)
 endif()
 
 target_link_libraries(runner_tests PRIVATE  catalyst_qir_runtime
-            rt_interfaces
             Catch2::Catch2)
 
 if(ENABLE_CODE_COVERAGE)
