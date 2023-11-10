@@ -363,14 +363,18 @@ LogicalResult runLowering(const CompilerOptions &options, MLIRContext *ctx, Modu
     // For each failed pass, print the owner pipeline name into a diagnostic stream.
     auto afterPassFailedCallback = [&](Pass *pass, Operation *op) {
         auto res = passPipelineNames.find(pass);
-        assert(res != passPipelineNames.end() && "Unexpected pass");
-        options.diagnosticStream << "While processing '" << pass->getName() << "' pass "
-                                 << "of the '" << res->second << "' pipeline\n";
-        llvm::raw_string_ostream s{outputs[res->second]};
-        s << *op;
-        if (options.keepIntermediate) {
-            dumpToFile(options, output.nextPipelineDumpFilename(res->second + "_FAILED"),
-                       outputs[res->second]);
+        if (res == passPipelineNames.end()) {
+            options.diagnosticStream << "Invalid pass with name '" << pass->getName() << "' failed\n";
+        }
+        else {
+            options.diagnosticStream << "While processing '" << pass->getName() << "' pass "
+                                     << "of the '" << res->second << "' pipeline\n";
+            llvm::raw_string_ostream s{outputs[res->second]};
+            s << *op;
+            if (options.keepIntermediate) {
+                dumpToFile(options, output.nextPipelineDumpFilename(res->second + "_FAILED"),
+                           outputs[res->second]);
+            }
         }
     };
 

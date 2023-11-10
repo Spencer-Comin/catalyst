@@ -342,7 +342,10 @@ def trace_to_mlir(func, *args, **kwargs):
     mlir_fn_cache.clear()
 
     with EvaluationContext(EvaluationMode.CLASSICAL_COMPILATION):
-        jaxpr, shape = jax.make_jaxpr(func, return_shape=True)(*args, **kwargs)
+        # FIXME: jaxpr, shape = jax.make_jaxpr(func, return_shape=True)(*args, **kwargs)
+        jaxpr = jax.make_jaxpr(func)(*args, **kwargs)
+        assert len(jaxpr.out_avals) == 1, "HACK: expected a single-ret value function"
+        shape = jaxpr.out_avals[0].shape
 
     return jaxpr_to_mlir(func.__name__, jaxpr, shape)
 

@@ -23,7 +23,7 @@ from jax._src import state, util
 from jax._src.core import _update_thread_local_jit_state, eval_jaxpr
 from jax._src.dispatch import jaxpr_replicas
 from jax._src.effects import ordered_effects as jax_ordered_effects
-from jax._src.interpreters.mlir import _module_name_regex
+from jax._src.interpreters.mlir import _module_name_regex, LoweringParameters
 from jax._src.interpreters.partial_eval import _input_type_to_tracers
 from jax._src.lax.control_flow import _initial_style_jaxpr, _initial_style_open_jaxpr
 from jax._src.lax.lax import _abstractify, xla
@@ -295,9 +295,10 @@ def jaxpr_to_mlir(func_name, jaxpr, shape):
     nrep = jaxpr_replicas(jaxpr)
     effects = jax_ordered_effects.filter_in(jaxpr.effects)
     axis_context = ReplicaAxisContext(xla.AxisEnv(nrep, (), ()))
-    name_stack = new_name_stack(wrap_name("ok", "jit"))
+    name_stack = new_name_stack(wrap_name("ok", "catalyst"))
     module, context = custom_lower_jaxpr_to_module(
-        func_name="jit_" + func_name,
+        # func_name="jit_" + func_name,
+        func_name="catalyst.entry_point", #"jit_" + func_name,
         module_name=func_name,
         jaxpr=jaxpr,
         effects=effects,
@@ -347,7 +348,14 @@ def custom_lower_jaxpr_to_module(
     keepalives = []
     host_callbacks = []
     ctx = ModuleContext(
-        None, platform, axis_context, name_stack, keepalives, channel_iter, host_callbacks
+        backend_or_name=None,
+        platform=platform,
+        axis_context=axis_context,
+        name_stack=name_stack,
+        keepalives=keepalives,
+        channel_iterator=channel_iter,
+        host_callbacks=host_callbacks,
+        lowering_parameters=LoweringParameters()
     )
     ctx.context.allow_unregistered_dialects = True
     with ctx.context, ir.Location.unknown(ctx.context):
@@ -369,12 +377,12 @@ def custom_lower_jaxpr_to_module(
             result_shardings=result_shardings,
         )
 
-        for op in ctx.module.body.operations:
-            func_name = str(op.name)
-            is_entry_point = func_name.startswith('"jit_')
-            if is_entry_point:
-                continue
-            op.attributes["llvm.linkage"] = ir.Attribute.parse("#llvm.linkage<internal>")
+        # for op in ctx.module.body.operations:
+        #     func_name = str(op.name)
+        #     is_entry_point = func_name.startswith('"jit_')
+        #     if is_entry_point:
+        #         continue
+        #     op.attributes["llvm.linkage"] = ir.Attribute.parse("#llvm.linkage<internal>")
 
     return ctx.module, ctx.context
 
