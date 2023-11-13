@@ -236,16 +236,19 @@ class CompiledFunction:
         return tree_unflatten(compiled_shape, promoted_args)
 
     @staticmethod
-    def get_runtime_signature(*args):
+    def get_runtime_signature(*args, abstracted_axes=None):
         """Get signature from arguments.
 
         Args:
             *args: arguments to the compiled function
+            abstracted_axes: TODO(@erick-xanadu): Document
 
         Returns:
             a list of JAX shaped arrays
         """
         args_data, args_shape = tree_flatten(args)
+
+        #if abstracted_axes is None:
 
         try:
             r_sig = []
@@ -256,6 +259,30 @@ class CompiledFunction:
         except Exception as exc:
             arg_type = type(arg)
             raise TypeError(f"Unsupported argument type: {arg_type}") from exc
+
+
+        # At the moment, only support the dictionary interface.
+        # Perhaps at a future date, add the list of tuples interface.
+        assert isinstance(abstracted_axes, dict)
+        implicit_params = []
+        # We have abstracted_axes, which means that variables get introduced
+        # implicitly.
+        for k, v in abstracted_axes.items():
+            p = jax.core.ShapedArray((), jnp.dtype("int64"), weak_type=False)
+            implicit_params.append(p)
+
+        explicit_params = []
+        for arg in args_data:
+            from jax._src.core import DShapedArray, DBIdx
+            shape = list(arg.shape)
+            for k, v in abstracted_axes.items():
+                # TODO: Generalized
+                shape[k] = DBIdx(0)
+            p = DShapedArray(shape, arg.dtype)
+            explicit_params.append(p)
+
+        return implicit_params + explicit_params
+            
 
     @staticmethod
     def _exec(shared_object, has_return, numpy_dict, *args):
@@ -554,10 +581,12 @@ class QJIT:
         else:
             self.c_sig = args
 
+        self.c_sig = (jax.numpy.array([1, 1, 1]),)
+
         with Patcher(
             (qml.QNode, "__call__", QFunc.__call__),
         ):
-            mlir_module, ctx, jaxpr, self.shape = trace_to_mlir(self.user_function, *self.c_sig)
+            mlir_module, ctx, jaxpr = trace_to_mlir(self.user_function, self.compile_options.abstracted_axes, *self.c_sig)
 
         inject_functions(mlir_module, ctx)
         self._jaxpr = jaxpr
@@ -628,7 +657,7 @@ class QJIT:
           function: an instance of ``CompiledFunction`` that may have been recompiled
           *args: arguments that may have been promoted
         """
-        r_sig = CompiledFunction.get_runtime_signature(*args)
+        r_sig = CompiledFunction.get_runtime_signature(*args, abstracted_axes=self.compile_options.abstracted_axes)
 
         has_been_compiled = self.compiled_function is not None
         next_action = TypeCompatibility.UNKNOWN
@@ -645,6 +674,7 @@ class QJIT:
                 warnings.warn(msg, UserWarning)
             if not self.compiling_from_textual_ir:
                 self.mlir_module = self.get_mlir(*r_sig)
+                print(self.mlir_module)
             function = self.compile()
         else:
             assert next_action == TypeCompatibility.CAN_SKIP_PROMOTION
@@ -948,12 +978,12 @@ def qjit(
 
     if fn is not None:
         return QJIT(
-            fn, CompileOptions(verbose, logfile, target, keep_intermediate, pipelines, autograph, abstracted_axes=None)
+            fn, CompileOptions(verbose, logfile, target, keep_intermediate, pipelines, autograph, abstracted_axes=abstracted_axes)
         )
 
     def wrap_fn(fn):
         return QJIT(
-            fn, CompileOptions(verbose, logfile, target, keep_intermediate, pipelines, autograph, abstracted_axes=None)
+            fn, CompileOptions(verbose, logfile, target, keep_intermediate, pipelines, autograph, abstracted_axes=abstracted_axes)
         )
 
     return wrap_fn

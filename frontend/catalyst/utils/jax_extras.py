@@ -274,7 +274,7 @@ def deduce_avals(f: Callable, args, kwargs):
     return wffa, in_avals, out_tree_promise
 
 
-def jaxpr_to_mlir(func_name, jaxpr, shape):
+def jaxpr_to_mlir(func_name, jaxpr):
     """Lower a Python function into an MLIR module.
 
     Args:
@@ -286,7 +286,6 @@ def jaxpr_to_mlir(func_name, jaxpr, shape):
         module: the MLIR module corresponding to ``func``
         context: the MLIR context corresponding
         jaxpr: the jaxpr corresponding to ``func``
-        shape: the shape of the return values in ``PyTreeDef``
     """
 
     nrep = jaxpr_replicas(jaxpr)
@@ -303,7 +302,7 @@ def jaxpr_to_mlir(func_name, jaxpr, shape):
         name_stack=name_stack,
     )
 
-    return module, context, jaxpr, tree_structure(shape)
+    return module, context, jaxpr
 
 
 # pylint: disable=too-many-arguments
