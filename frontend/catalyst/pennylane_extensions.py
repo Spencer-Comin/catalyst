@@ -177,6 +177,9 @@ class QFunc:
         args_data, _ = tree_flatten(args)
 
         wrapped = wrap_init(_eval_jaxpr)
+        print(jaxpr.jaxpr)
+        import pdb
+        pdb.set_trace()
         retval = func_p.bind(wrapped, *args_data, fn=self)
 
         return tree_unflatten(retval_tree, retval)

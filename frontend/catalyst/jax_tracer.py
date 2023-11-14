@@ -346,10 +346,10 @@ def trace_to_mlir(func, abstracted_axes, *args, **kwargs):
 
     with EvaluationContext(EvaluationMode.CLASSICAL_COMPILATION):
         # TODO: Get the shape some other way...
-        jaxpr = jax.make_jaxpr(func, abstracted_axes=abstracted_axes)(*args, **kwargs)
+        jaxpr, shape = jax.make_jaxpr(func, abstracted_axes=abstracted_axes, return_shape=True)(*args, **kwargs)
         #jaxpr, shape = jax.make_jaxpr(func, return_shape=True)(*args, **kwargs)
 
-    return jaxpr_to_mlir(func.__name__, jaxpr)
+    return jaxpr_to_mlir(func.__name__, jaxpr, shape)
 
 
 def trace_quantum_tape(
@@ -691,7 +691,10 @@ def trace_post_processing(ctx, trace, post_processing, args_types, args):
         # The shape is in a list of args_types.
 
         # We need to deduce the type/shape/tree of the post_processing.
-        wffa, _, out_tree_promise = deduce_avals(post_processing, (args_types,), {})
+        _args = ([jax.numpy.array([1, 2, 3])],)
+        wffa, in_avals, keep_inputs, out_tree_promise = deduce_avals(post_processing, _args, {}, abstracted_axes={0: "n"})
+        #in_classical_tracers = _input_type_to_tracers(trace.new_arg, in_avals)
+        #args = [t for t, keep in zip(in_classical_tracers, keep_inputs) if keep]
 
         # wffa will take as an input a flatten tracers.
         post_processing_retval_flat = wffa.call_wrapped(*args)
@@ -734,8 +737,13 @@ def trace_quantum_function(
         # (1) - Classical tracing
         quantum_tape = QuantumTape()
         with EvaluationContext.frame_tracing_context(ctx) as trace:
-            wffa, in_avals, out_tree_promise = deduce_avals(f, args, kwargs)
+            #args = list(args)
+            #args.insert(0, jax.numpy.array(3))
+            #args = tuple(jax.numpy.array(3)] + args)
+            #args = tuple(args)
+            wffa, in_avals, keep_inputs, out_tree_promise = deduce_avals(f, args, kwargs, abstracted_axes={0: "n"})
             in_classical_tracers = _input_type_to_tracers(trace.new_arg, in_avals)
+            in_classical_tracers = [t for t, keep in zip(in_classical_tracers, keep_inputs) if keep]
             with QueuingManager.stop_recording(), quantum_tape:
                 # Quantum tape transformations happen at the end of tracing
                 return_values_flat = wffa.call_wrapped(*in_classical_tracers)
@@ -811,6 +819,7 @@ def trace_quantum_function(
                     results_abstract.append(abstract_results)
                 # TODO: `check_jaxpr` complains about the `AbstractQreg` type. Consider fixing.
                 # check_jaxpr(jaxpr)
+                print(jaxpr)
 
         closed_jaxpr, unflattened_callback_results = trace_post_processing(
             ctx, trace, post_processing, results_abstract, results_tracers

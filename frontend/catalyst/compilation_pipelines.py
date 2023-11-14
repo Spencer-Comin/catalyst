@@ -461,6 +461,9 @@ class CompiledFunction:
         return get_template(self.func_name, self.restype, *buffer)
 
     def __call__(self, *args, **kwargs):
+        args = list(args)
+        args.insert(0, jax.numpy.array(3))
+        args = tuple(args)
         abi_args, _buffer = self.args_to_memref_descs(self.restype, args)
 
         numpy_dict = {nparr.ctypes.data: nparr for nparr in _buffer}
@@ -581,12 +584,12 @@ class QJIT:
         else:
             self.c_sig = args
 
-        self.c_sig = (jax.numpy.array([1, 1, 1]),)
+        self.c_sig = (jax.numpy.array([1, 1, 1]),jax.numpy.array([1, 1, 1]))
 
         with Patcher(
             (qml.QNode, "__call__", QFunc.__call__),
         ):
-            mlir_module, ctx, jaxpr = trace_to_mlir(self.user_function, self.compile_options.abstracted_axes, *self.c_sig)
+            mlir_module, ctx, jaxpr, self.shape = trace_to_mlir(self.user_function, self.compile_options.abstracted_axes, *self.c_sig)
 
         inject_functions(mlir_module, ctx)
         self._jaxpr = jaxpr
@@ -674,7 +677,6 @@ class QJIT:
                 warnings.warn(msg, UserWarning)
             if not self.compiling_from_textual_ir:
                 self.mlir_module = self.get_mlir(*r_sig)
-                print(self.mlir_module)
             function = self.compile()
         else:
             assert next_action == TypeCompatibility.CAN_SKIP_PROMOTION

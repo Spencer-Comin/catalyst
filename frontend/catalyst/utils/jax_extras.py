@@ -31,11 +31,13 @@ from jax._src.linear_util import annotate
 from jax._src.sharding_impls import ReplicaAxisContext
 from jax._src.source_info_util import current as jax_current
 from jax._src.source_info_util import new_name_stack
+from jax._src.api import _flat_axes_specs
 from jax._src.util import partition_list, safe_map, unzip2, unzip3, wrap_name
 from jax.api_util import flatten_fun, shaped_abstractify
 from jax.core import ClosedJaxpr, Jaxpr, JaxprEqn, MainTrace
 from jax.core import Primitive as JaxprPrimitive
 from jax.core import ShapedArray, Trace, gensym, thread_local_state
+from jax._src.interpreters import partial_eval as pe
 from jax.interpreters.mlir import (
     AxisContext,
     ModuleContext,
@@ -261,20 +263,34 @@ def initial_style_jaxprs_with_common_consts2(jaxprs, all_consts):
     return closed_jaxprs, consts
 
 
-def deduce_avals(f: Callable, args, kwargs):
+def deduce_avals(f: Callable, args, kwargs, abstracted_axes = None):
     """Wraps the callable ``f`` into a WrappedFun JAX container. Calculate input abstract values
     and output_tree promise. The promise must be called after the resulting wrapped function is
     evaluated."""
     flat_args, in_tree = tree_flatten((args, kwargs))
+    if abstracted_axes is None:
+        wf = wrap_init(f)
+        in_avals, keep_inputs = list(map(shaped_abstractify, flat_args)), [True] * len(flat_args)
+        in_type = tuple(zip(in_avals, keep_inputs))
+        wff, out_tree_promise = flatten_fun(wf, in_tree)
+        wffa = annotate(wff, in_type)
+        return wffa, in_avals, keep_inputs, out_tree_promise
+
+    axes_specs = _flat_axes_specs(abstracted_axes, *args, **kwargs)
+    in_type = pe.infer_lambda_input_type(axes_specs, flat_args)
+    in_avals, keep_inputs = unzip2(in_type)
     wf = wrap_init(f)
-    in_avals, keep_inputs = list(map(shaped_abstractify, flat_args)), [True] * len(flat_args)
-    in_type = tuple(zip(in_avals, keep_inputs))
     wff, out_tree_promise = flatten_fun(wf, in_tree)
     wffa = annotate(wff, in_type)
-    return wffa, in_avals, out_tree_promise
+    #wf = wrap_init(f)
+    #in_avals, keep_inputs = list(map(shaped_abstractify, flat_args)), [True] * len(flat_args)
+    #in_type = tuple(zip(in_avals, keep_inputs))
+    #wff, out_tree_promise = flatten_fun(wf, in_tree)
+    #wffa = annotate(wff, in_type)
+    return wffa, in_avals, keep_inputs, out_tree_promise
 
 
-def jaxpr_to_mlir(func_name, jaxpr):
+def jaxpr_to_mlir(func_name, jaxpr, shape):
     """Lower a Python function into an MLIR module.
 
     Args:
@@ -302,7 +318,7 @@ def jaxpr_to_mlir(func_name, jaxpr):
         name_stack=name_stack,
     )
 
-    return module, context, jaxpr
+    return module, context, jaxpr, tree_structure(shape)
 
 
 # pylint: disable=too-many-arguments
