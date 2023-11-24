@@ -32,7 +32,7 @@ from catalyst import qjit
 from catalyst.compilation_pipelines import WorkspaceManager
 from catalyst.compiler import DEFAULT_PIPELINES, CompileOptions, Compiler, LinkerDriver
 from catalyst.jax_tracer import trace_to_mlir
-from catalyst.pennylane_extensions import QFunc, measure
+from catalyst.pennylane_extensions import QFunc
 from catalyst.utils.exceptions import CompileError
 from catalyst.utils.filesystem import Directory
 
@@ -351,7 +351,9 @@ module @workflow {
 
 
 class TestQFunc:
-    def test_validate_qnode(self):
+    """Test that a QFunc is properly validated"""
+
+    def test_qnode_has_no_c_interface(self):
         class CustomDevice(qml.QubitDevice):
             """Custom Device without c interface."""
 
@@ -364,13 +366,14 @@ class TestQFunc:
             operations = []
             observables = []
 
-            def apply(self, operations, **kwargs):
+            def apply(self, _operations, **_kwargs):
                 ...
 
         qnode = qml.QNode(lambda x: x, CustomDevice(wires=1))
 
         regex = "The .* device is not supported for compilation at the moment."
         with pytest.raises(CompileError, match=regex):
+            # pylint: disable=protected-access
             QFunc._validate_qnode(qnode)
 
 
