@@ -69,6 +69,13 @@
   `__quantum__rt__device_init(int8_t *, int8_t *, int8_t *)`.
   [(#396)](https://github.com/PennyLaneAI/catalyst/pull/396)
 
+ * Add `DeviceReleaseOp` to the Quantum MLIR dialect. This will be lowered to
+  the `__quantum__rt__device_release()` runtime instruction and releases the device
+  memory and update the status of the device instance from `ACTIVE` to `RELEASE`.
+  The runtime will re-use this released instance instead of creating a new one
+  automatically at runtime in a multi-qnode workflow when multiple devices have
+  identical specifications.
+
 <h3>Breaking changes</h3>
 
 <h3>Bug fixes</h3>
