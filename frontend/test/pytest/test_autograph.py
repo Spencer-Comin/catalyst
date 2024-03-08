@@ -637,7 +637,6 @@ class TestConditionals:
 
         assert 0.0 == circuit()
 
-
 @pytest.mark.tf
 class TestForLoops:
     """Test that the autograph transformations produce correct results on for loops."""

@@ -8,9 +8,14 @@
 
 <h3>Bug fixes</h3>
 
+* Fix the issue of triggering the C++ compiler driver twice.
+  [(#594)](https://github.com/PennyLaneAI/catalyst/pull/594)
+
 <h3>Contributors</h3>
 
 This release contains contributions from (in alphabetical order):
+
+Ali Asadi,
 
 # Release 0.5.0
 
