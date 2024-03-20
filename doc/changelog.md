@@ -22,6 +22,11 @@
   [(#637)](https://github.com/PennyLaneAI/catalyst/pull/637)
   [(#639)](https://github.com/PennyLaneAI/catalyst/pull/639)
 
+* Fix runtime tests to be compatible with amazon-braket-sdk==1.73.3
+  [(#620)](https://github.com/PennyLaneAI/catalyst/pull/620)
+
+  After an update in the amazon-braket-sdk all declared qubits are measured as opposed to drop if there were no uses.
+
 <h3>Contributors</h3>
 
 This release contains contributions from (in alphabetical order):
