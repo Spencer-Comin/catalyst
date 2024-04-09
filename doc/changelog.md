@@ -30,6 +30,9 @@
 * Disable ASAN in Github Actions.
   [(#604)](https://github.com/PennyLaneAI/catalyst/pull/604)
 
+* Pin cudaq to 0.6.0
+  [(#619)](https://github.com/PennyLaneAI/catalyst/pull/619)
+
 <h3>Contributors</h3>
 
 This release contains contributions from (in alphabetical order):
