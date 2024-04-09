@@ -8,6 +8,9 @@
 
 <h3>Bug fixes</h3>
 
+* Use `sysconfig` instead of `distutils.sysconfig`.
+  [(#653)](https://github.com/PennyLaneAI/catalyst/pull/653)
+
 * Fix the issue of triggering the C++ compiler driver twice.
   [(#594)](https://github.com/PennyLaneAI/catalyst/pull/594)
 
