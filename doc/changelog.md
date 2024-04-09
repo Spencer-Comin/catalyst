@@ -8,6 +8,9 @@
 
 <h3>Bug fixes</h3>
 
+* Ignore unraisable warning in autograph test.
+  [(#652)](https://github.com/PennyLaneAI/catalyst/pull/652)
+
 * Use `sysconfig` instead of `distutils.sysconfig`.
   [(#653)](https://github.com/PennyLaneAI/catalyst/pull/653)
 
