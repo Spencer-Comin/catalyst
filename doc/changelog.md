@@ -27,11 +27,16 @@
 
   After an update in the amazon-braket-sdk all declared qubits are measured as opposed to drop if there were no uses.
 
+* Disable ASAN in Github Actions.
+  [(#604)](https://github.com/PennyLaneAI/catalyst/pull/604)
+
 <h3>Contributors</h3>
 
 This release contains contributions from (in alphabetical order):
 
 Ali Asadi,
+David Ittah,
+Sergei Mironov,
 Romain Moyard,
 Erick Ochoa Lopez.
 
