@@ -18,11 +18,16 @@
 * Fixes adjoint lowering bug that did not take into account control wires.
   [(#591)](https://github.com/PennyLaneAI/catalyst/pull/591)
 
+* Fixes scipy version to <= 1.12.0
+  [(#637)](https://github.com/PennyLaneAI/catalyst/pull/637)
+  [(#639)](https://github.com/PennyLaneAI/catalyst/pull/639)
+
 <h3>Contributors</h3>
 
 This release contains contributions from (in alphabetical order):
 
 Ali Asadi,
+Romain Moyard,
 Erick Ochoa Lopez.
 
 # Release 0.5.0
