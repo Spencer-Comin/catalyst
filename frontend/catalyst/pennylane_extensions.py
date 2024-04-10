@@ -21,6 +21,8 @@ while using :func:`~.qjit`.
 import copy
 import ctypes
 import inspect
+import logging
+
 import numbers
 from collections.abc import Sequence, Sized
 from functools import update_wrapper, wraps
@@ -110,6 +112,8 @@ from catalyst.utils.runtime import (
 )
 from catalyst.utils.toml import TOMLDocument
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 def _check_no_measurements(tape: QuantumTape) -> None:
     """Check the nested quantum tape for the absense of quantum measurements of any kind"""
@@ -165,6 +169,14 @@ class QFunc:
             device = self.device
 
         def _eval_quantum(*args):
+
+            if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+                logger.debug(
+                    "Entry with (args=%s) called by %s",
+                    args,
+                    "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                )
+
             closed_jaxpr, out_type, out_tree = trace_quantum_function(
                 self.func, device, args, kwargs, qnode
             )

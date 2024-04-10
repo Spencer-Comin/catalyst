@@ -16,6 +16,8 @@ MLIR/LLVM representations.
 """
 import glob
 import importlib
+import inspect
+import logging
 import os
 import pathlib
 import platform
@@ -35,10 +37,12 @@ from catalyst.utils.exceptions import CompileError
 from catalyst.utils.filesystem import Directory
 from catalyst.utils.runtime import get_lib_path
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 package_root = os.path.dirname(__file__)
 
 DEFAULT_CUSTOM_CALLS_LIB_PATH = path.join(package_root, "utils")
-
 
 # pylint: disable=too-many-instance-attributes
 @dataclass
@@ -113,8 +117,17 @@ def run_writing_command(command: List[str], compile_options: Optional[CompileOpt
         compile_options (Optional[CompileOptions]): compile options.
     """
 
+    # This next step is redundant and should be replaced by the Python language logging framework 
     if compile_options.verbose:
         print(f"[SYSTEM] {' '.join(command)}", file=compile_options.logfile)
+    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+        logger.debug(
+            "Entry with (command=\"%s\", compile_options=%s) called by %s",
+            " ".join(command),
+            compile_options,
+            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+        )
+
     subprocess.run(command, check=True)
 
 
@@ -261,6 +274,14 @@ class LinkerDriver:
         Returns
             (List[str]): The default flag list.
         """
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (options=%s) called by %s",
+                options,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         mlir_lib_path = get_lib_path("llvm", "MLIR_LIB_DIR")
         rt_lib_path = get_lib_path("runtime", "RUNTIME_LIB_DIR")
 
@@ -419,6 +440,18 @@ class LinkerDriver:
         Raises:
             EnvironmentError: The exception is raised when no compiler succeeded.
         """
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (infile=%s, outfile=%s, flags=%s, fallback_compilers=%s, options=%s) called by %s",
+                infile,
+                outfile,
+                flags,
+                fallback_compilers,
+                options,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         if outfile is None:
             outfile = LinkerDriver.get_output_filename(infile)
         if options is None:
@@ -438,8 +471,13 @@ class LinkerDriver:
 
 class Compiler:
     """Compiles MLIR modules to shared objects by executing the Catalyst compiler driver library."""
-
     def __init__(self, options: Optional[CompileOptions] = None):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                """Creating Compiler(options=%s)""",
+                options,
+            )
+
         self.options = options if options is not None else CompileOptions()
         self.last_compiler_output = None
 
@@ -460,6 +498,15 @@ class Compiler:
                func_name (str) Inferred name of the main function
                ret_type_name (str) Inferred main function result type name
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (ir=%s, module_name=%s, workspace=%s) called by %s",
+                ir,
+                module_name,
+                workspace,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         assert isinstance(
             workspace, Directory
         ), f"Compiler expects a Directory type, got {type(workspace)}."

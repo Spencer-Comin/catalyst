@@ -19,6 +19,7 @@ compilation of hybrid quantum-classical functions using Catalyst.
 import copy
 import functools
 import inspect
+import logging
 import os
 import warnings
 
@@ -47,6 +48,9 @@ from catalyst.utils.filesystem import WorkspaceManager
 from catalyst.utils.gen_mlir import inject_functions
 from catalyst.utils.patching import Patcher
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 # Required for JAX tracer objects as PennyLane wires.
 # pylint: disable=unnecessary-lambda
 setattr(jax.interpreters.partial_eval.DynamicJaxprTracer, "__hash__", lambda x: id(x))
@@ -71,6 +75,17 @@ class QJIT:
     """
 
     def __init__(self, fn, compile_options):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                """Creating QJIT(fn=%s, compile_options=%s)""",
+                (
+                    fn
+                    if not (logger.isEnabledFor(qml.logging.TRACE))
+                    else "\n" + inspect.getsource(fn)
+                ),
+                compile_options,
+            )
+
         self.original_function = fn
         self.compile_options = compile_options
         self.compiler = Compiler(compile_options)
@@ -102,6 +117,15 @@ class QJIT:
 
     def __call__(self, *args, **kwargs):
         # Transparantly call Python function in case of nested QJIT calls.
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (args=%s, kwargs=%s) called by %s",
+                args,
+                kwargs,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         if EvaluationContext.is_tracing():
             return self.user_function(*args, **kwargs)
 
@@ -147,6 +171,13 @@ class QJIT:
             bool: whether the provided arguments will require promotion to be used with the compiled
                   function
         """
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (args=%s) called by %s",
+                args,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
 
         cached_fn, requires_promotion = self.fn_cache.lookup(args)
 
@@ -204,6 +235,13 @@ class QJIT:
             PyTreeDef: PyTree metadata of the function output
             Tuple[Any]: the dynamic argument signature
         """
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (args=%s) called by %s",
+                args,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
 
         self._verify_static_argnums(args)
         static_argnums = self.compile_options.static_argnums
@@ -284,6 +322,14 @@ class QJIT:
             Any: results of the execution arranged into the original function's output PyTrees
         """
 
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (args=%s, kwargs=%s) called by %s",
+                args,
+                kwargs,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         results = self.compiled_function(*args, **kwargs)
 
         # TODO: Move this to the compiled function object.
@@ -325,6 +371,16 @@ class JAX_QJIT:
     """
 
     def __init__(self, qjit_function):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                """Creating JAX_QJIT(qjit_function=%s)""",
+                (
+                    qjit_function
+                    if not (logger.isEnabledFor(qml.logging.TRACE) and inspect.isfunction(qjit_function))
+                    else "\n" + inspect.getsource(qjit_function)
+                )
+            )
+
         @jax.custom_jvp
         def jaxed_function(*args, **kwargs):
             return self.wrap_callback(qjit_function, *args, **kwargs)
@@ -337,6 +393,16 @@ class JAX_QJIT:
     @staticmethod
     def wrap_callback(qjit_function, *args, **kwargs):
         """Wrap a QJIT function inside a jax host callback."""
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (qjit_function=%s, args=%s, kwargs=%s) called by %s",
+                qjit_function,
+                args,
+                kwargs,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
+
         data = jax.pure_callback(
             qjit_function, qjit_function.jaxpr.out_avals, *args, vectorized=False, **kwargs
         )
@@ -347,6 +413,13 @@ class JAX_QJIT:
 
     def get_derivative_qjit(self, argnums):
         """Compile a function computing the derivative of the wrapped QJIT for the given argnums."""
+
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (argnums=%s) called by %s",
+                argnums,
+                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+            )
 
         argnum_key = "".join(str(idx) for idx in argnums)
         if argnum_key in self.derivative_functions:
@@ -718,6 +791,21 @@ def qjit(
         the ``sum_abstracted`` function would only compile once and its definition would be
         reused for subsequent function calls.
     """
+    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+        logger.debug(
+            "Entry with (fn=%s, autograph=%s, async_qnodes=%s, target=%s, keep_intermediate=%s, verbose=%s, logfile=%s, pipelines=%s, static_argnums=%s, abstracted_axes=%s) called by %s",
+            fn,
+            autograph,
+            async_qnodes,
+            target,
+            keep_intermediate,
+            verbose,
+            logfile,
+            pipelines,
+            static_argnums,
+            abstracted_axes,
+            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+        )
 
     argnums = static_argnums
     axes = abstracted_axes
