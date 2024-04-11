@@ -508,7 +508,7 @@ def trace_quantum_tape(
         logger.debug(
             f"Entry with (quantum_tape=%s, device=%s, qreg=%s, ctx=%s, trace=%s) called by %s",
             quantum_tape,
-            device,
+            str(device),
             qreg,
             ctx,
             trace,
@@ -739,7 +739,7 @@ def trace_quantum_measurements(
     if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
         logger.debug(
             f"Entry with (device=%s, qrp=%s, outputs=%s, out_tree=%s, tape=%s) called by %s",
-            device,
+            str(device),
             qrp,
             outputs,
             out_tree,
@@ -1022,8 +1022,12 @@ def trace_quantum_function(
     if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
         logger.debug(
             f"Entry with (f=%s, device=%s, args=%s, kwargs=%s, qnode=%s) called by %s",
-            f,
-            device,
+            (
+                f
+                if not (logger.isEnabledFor(TRACE) and inspect.isfunction(f))
+                else "\n" + inspect.getsource(f)
+            ),
+            str(device),
             args,
             kwargs,
             qnode,
