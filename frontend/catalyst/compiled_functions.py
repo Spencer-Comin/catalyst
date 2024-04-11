@@ -364,7 +364,6 @@ class CompiledFunction:
             fields match the expected return types
         """
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            print(locals().keys())
             logger.debug(
                 f"Entry with {self}(mlir_tensor_types=%s) called by %s",
                 mlir_tensor_types,
