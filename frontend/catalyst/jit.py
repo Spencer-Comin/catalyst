@@ -77,7 +77,7 @@ class QJIT:
     def __init__(self, fn, compile_options):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                """Creating QJIT(fn=%s, compile_options=%s)""",
+                f"""Creating {self.__class__}(fn=%s, compile_options=%s)""",
                 (
                     fn
                     if not (logger.isEnabledFor(qml.logging.TRACE))
@@ -120,10 +120,12 @@ class QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (args=%s, kwargs=%s) called by %s",
+                f"Entry with {self}(args=%s, kwargs=%s) called by %s",
                 args,
                 kwargs,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         if EvaluationContext.is_tracing():
@@ -174,9 +176,11 @@ class QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (args=%s) called by %s",
+                f"Entry with {self}(args=%s) called by %s",
                 args,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         cached_fn, requires_promotion = self.fn_cache.lookup(args)
@@ -238,9 +242,11 @@ class QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (args=%s) called by %s",
+                f"Entry with {self}(args=%s) called by %s",
                 args,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         self._verify_static_argnums(args)
@@ -324,10 +330,12 @@ class QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (args=%s, kwargs=%s) called by %s",
+                f"Entry with {self}(args=%s, kwargs=%s) called by %s",
                 args,
                 kwargs,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         results = self.compiled_function(*args, **kwargs)
@@ -373,12 +381,14 @@ class JAX_QJIT:
     def __init__(self, qjit_function):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                """Creating JAX_QJIT(qjit_function=%s)""",
+                f"""Creating {self.__class__}(qjit_function=%s)""",
                 (
                     qjit_function
-                    if not (logger.isEnabledFor(qml.logging.TRACE) and inspect.isfunction(qjit_function))
+                    if not (
+                        logger.isEnabledFor(qml.logging.TRACE) and inspect.isfunction(qjit_function)
+                    )
                     else "\n" + inspect.getsource(qjit_function)
-                )
+                ),
             )
 
         @jax.custom_jvp
@@ -396,11 +406,13 @@ class JAX_QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (qjit_function=%s, args=%s, kwargs=%s) called by %s",
+                f"Entry with {self}(qjit_function=%s, args=%s, kwargs=%s) called by %s",
                 qjit_function,
                 args,
                 kwargs,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         data = jax.pure_callback(
@@ -416,9 +428,11 @@ class JAX_QJIT:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (argnums=%s) called by %s",
+                f"Entry with {self}(argnums=%s) called by %s",
                 argnums,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         argnum_key = "".join(str(idx) for idx in argnums)

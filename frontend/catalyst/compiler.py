@@ -32,6 +32,7 @@ from os import path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from mlir_quantum.compiler_driver import run_compiler_driver
+from pennylane.logging import TRACE
 
 from catalyst.utils.exceptions import CompileError
 from catalyst.utils.filesystem import Directory
@@ -43,6 +44,7 @@ logger.addHandler(logging.NullHandler())
 package_root = os.path.dirname(__file__)
 
 DEFAULT_CUSTOM_CALLS_LIB_PATH = path.join(package_root, "utils")
+
 
 # pylint: disable=too-many-instance-attributes
 @dataclass
@@ -117,12 +119,12 @@ def run_writing_command(command: List[str], compile_options: Optional[CompileOpt
         compile_options (Optional[CompileOptions]): compile options.
     """
 
-    # This next step is redundant and should be replaced by the Python language logging framework 
+    # This next step is redundant and should be replaced by the Python language logging framework
     if compile_options.verbose:
         print(f"[SYSTEM] {' '.join(command)}", file=compile_options.logfile)
     if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
         logger.debug(
-            "Entry with (command=\"%s\", compile_options=%s) called by %s",
+            'Entry with (command="%s", compile_options=%s) called by %s',
             " ".join(command),
             compile_options,
             "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
@@ -279,7 +281,9 @@ class LinkerDriver:
             logger.debug(
                 "Entry with (options=%s) called by %s",
                 options,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         mlir_lib_path = get_lib_path("llvm", "MLIR_LIB_DIR")
@@ -376,6 +380,15 @@ class LinkerDriver:
     @staticmethod
     def _get_compiler_fallback_order(fallback_compilers):
         """Compiler fallback order"""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (fallback_compilers=%s) called by %s",
+                fallback_compilers,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         preferred_compiler = os.environ.get("CATALYST_CC", None)
         preferred_compiler_exists = LinkerDriver._exists(preferred_compiler)
         compilers = fallback_compilers
@@ -421,6 +434,15 @@ class LinkerDriver:
             infile (str): input file name
             outfile (str): output file name
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (infile=%s) called by %s",
+                infile,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         infile_path = pathlib.Path(infile)
         if not infile_path.exists():
             raise FileNotFoundError(f"Cannot find {infile}.")
@@ -443,13 +465,15 @@ class LinkerDriver:
 
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (infile=%s, outfile=%s, flags=%s, fallback_compilers=%s, options=%s) called by %s",
+                f"Entry with (infile=%s, outfile=%s, flags=%s, fallback_compilers=%s, options=%s) called by %s",
                 infile,
                 outfile,
                 flags,
                 fallback_compilers,
                 options,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         if outfile is None:
@@ -471,10 +495,11 @@ class LinkerDriver:
 
 class Compiler:
     """Compiles MLIR modules to shared objects by executing the Catalyst compiler driver library."""
+
     def __init__(self, options: Optional[CompileOptions] = None):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
-                """Creating Compiler(options=%s)""",
+                f"""Creating {self.__class__}(options=%s)""",
                 options,
             )
 
@@ -500,11 +525,13 @@ class Compiler:
         """
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
-                "Entry with (ir=%s, module_name=%s, workspace=%s) called by %s",
+                f"Entry with {self}(ir=%s, module_name=%s, workspace=%s) called by %s",
                 ir,
                 module_name,
                 workspace,
-                "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
             )
 
         assert isinstance(
@@ -530,6 +557,14 @@ class Compiler:
                 lower_to_llvm=lower_to_llvm,
             )
         except RuntimeError as e:
+            logger.error(
+                "Error (e=%s) called by %s",
+                e,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
             raise CompileError(*e.args) from e
 
         if self.options.verbose:
@@ -564,6 +599,16 @@ class Compiler:
         Returns:
             (str): filename of shared object
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(mlir_module=%s, args=%s, kwargs=%s) called by %s",
+                (repr(mlir_module) if not (logger.isEnabledFor(TRACE)) else mlir_module),
+                args,
+                kwargs,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
 
         return self.run_from_ir(
             mlir_module.operation.get_asm(
@@ -582,6 +627,15 @@ class Compiler:
         Returns
             (Optional[str]): output IR
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(pipeline=%s) called by %s",
+                pipeline,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         if len(dict(self.options.get_pipelines()).get(pipeline, [])) == 0:
             warnings.warn("Requesting an output of an empty pipeline")  # pragma: no cover
 

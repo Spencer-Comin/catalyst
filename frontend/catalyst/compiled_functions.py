@@ -15,6 +15,8 @@
 """This module contains classes to manage compiled functions and their underlying resources."""
 
 import ctypes
+import inspect
+import logging
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -39,6 +41,9 @@ from catalyst.utils.c_template import get_template, mlir_type_to_numpy_type
 from catalyst.utils.filesystem import Directory
 from catalyst.utils.jnp_to_memref import get_ranked_memref_descriptor
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 
 class SharedObjectManager:
     """Shared object manager.
@@ -51,6 +56,13 @@ class SharedObjectManager:
     """
 
     def __init__(self, shared_object_file, func_name):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"""Creating {self.__class__}(shared_object_file=%s, func_name=%s)""",
+                shared_object_file,
+                func_name,
+            )
+
         self.shared_object_file = shared_object_file
         self.shared_object = None
         self.func_name = func_name
@@ -61,12 +73,28 @@ class SharedObjectManager:
         self.open()
 
     def open(self):
-        """Open the sharead object and load symbols."""
+        """Open the shared object and load symbols."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         self.shared_object = ctypes.CDLL(self.shared_object_file)
         self.function, self.setup, self.teardown, self.mem_transfer = self.load_symbols()
 
     def close(self):
         """Close the shared object"""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         self.function = None
         self.setup = None
         self.teardown = None
@@ -85,6 +113,13 @@ class SharedObjectManager:
             CFuncPtr: handle to the teardown function, which tears down the device
             CFuncPtr: handle to the memory transfer function for program results
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
 
         setup = self.shared_object.setup
         setup.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_char_p)]
@@ -106,6 +141,14 @@ class SharedObjectManager:
         return function, setup, teardown, mem_transfer
 
     def __enter__(self):
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         params_to_setup = [b"jitted-function"]
         argc = len(params_to_setup)
         array_of_char_ptrs = (ctypes.c_char_p * len(params_to_setup))()
@@ -114,6 +157,14 @@ class SharedObjectManager:
         return self
 
     def __exit__(self, _type, _value, _traceback):
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         self.teardown()
 
 
@@ -129,6 +180,15 @@ class CompiledFunction:
     """
 
     def __init__(self, shared_object_file, func_name, restype, compile_options):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"""Creating {self.__class__}(shared_object_file=%s, func_name=%s, restype=%s, compile_options=%s)""",
+                shared_object_file,
+                func_name,
+                restype,
+                compile_options,
+            )
+
         self.shared_object = SharedObjectManager(shared_object_file, func_name)
         self.compile_options = compile_options
         self.return_type_c_abi = None
@@ -148,6 +208,17 @@ class CompiledFunction:
         Returns:
             the return values computed by the function or None if the function has no results
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (shared_object=%s, has_return=%s, numpy_dict=%s, args=%s) called by %s",
+                shared_object,
+                has_return,
+                numpy_dict,
+                args,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
 
         with shared_object as lib:
             result_desc = type(args[0].contents) if has_return else None
@@ -164,6 +235,15 @@ class CompiledFunction:
         Returns:
             a memref descriptor with empty data
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (mlir_tensor_type=%s) called by %s",
+                mlir_tensor_type,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         assert mlir_tensor_type
         assert mlir_tensor_type is not tuple
         shape = mlir.ir.RankedTensorType(mlir_tensor_type).shape
@@ -180,12 +260,30 @@ class CompiledFunction:
     @staticmethod
     def get_etypes(mlir_tensor_type):
         """Get element type for an MLIR tensor type."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (mlir_tensor_type=%s) called by %s",
+                mlir_tensor_type,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         mlir_element_type = mlir.ir.RankedTensorType(mlir_tensor_type).element_type
         return mlir_type_to_numpy_type(mlir_element_type)
 
     @staticmethod
     def get_sizes(mlir_tensor_type):
         """Get element type size for an MLIR tensor type."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (mlir_tensor_type=%s) called by %s",
+                mlir_tensor_type,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         mlir_element_type = mlir.ir.RankedTensorType(mlir_tensor_type).element_type
         numpy_type = mlir_type_to_numpy_type(mlir_element_type)
         dtype = np.dtype(numpy_type)
@@ -194,6 +292,14 @@ class CompiledFunction:
     @staticmethod
     def get_ranks(mlir_tensor_type):
         """Get rank for an MLIR tensor type."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                "Entry with (mlir_tensor_type=%s) called by %s",
+                mlir_tensor_type,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
         shape = mlir.ir.RankedTensorType(mlir_tensor_type).shape
         return len(shape) if shape else 0
 
@@ -207,6 +313,14 @@ class CompiledFunction:
             a pointer to a CompiledFunctionReturnValue, which corresponds to a structure in which
             fields match the expected return types
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(mlir_tensor_type=%s) called by %s",
+                mlir_tensor_types,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
 
         if self.return_type_c_abi is not None:
             return self.return_type_c_abi
@@ -249,6 +363,16 @@ class CompiledFunction:
             a pointer to a CompiledFunctionReturnValue, which corresponds to a structure in which
             fields match the expected return types
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            print(locals().keys())
+            logger.debug(
+                f"Entry with {self}(mlir_tensor_types=%s) called by %s",
+                mlir_tensor_types,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         return self.getCompiledReturnValueType(mlir_tensor_types)
 
     def args_to_memref_descs(self, restype, args):

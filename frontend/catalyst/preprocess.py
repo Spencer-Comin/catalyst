@@ -13,6 +13,9 @@
 # limitations under the License.
 """This module contains the preprocessing functions.
 """
+import inspect
+import logging
+
 import jax
 import pennylane as qml
 from pennylane import transform
@@ -24,6 +27,9 @@ from pennylane.tape.tape import (
 
 import catalyst
 from catalyst.utils.exceptions import CompileError
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 @transform
@@ -38,6 +44,15 @@ def decompose_ops_to_unitary(tape, convert_to_matrix_ops):
         qnode (QNode) or quantum function (Callable) or tuple[List[QuantumTape], function]: The
         transformed circuit as described in :func:`qml.transform <pennylane.transform>`.
     """
+
+    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+        logger.debug(
+            "Entry with (tape=%s, convert_to_matrix_ops=%s) called by %s",
+            tape,
+            convert_to_matrix_ops,
+            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+        )
+
     new_operations = []
 
     for op in tape.operations:
@@ -83,6 +98,12 @@ def measurements_from_counts(tape):
 
         Samples are not supported.
     """
+    logger.debug(
+        "Entry with (tape=%s) called by %s",
+        tape,
+        "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+    )
+
     if tape.samples_computational_basis and len(tape.measurements) > 1:
         _validate_computational_basis_sampling(tape.measurements)
     diagonalizing_gates, diagonal_measurements = rotations_and_diagonal_measurements(tape)

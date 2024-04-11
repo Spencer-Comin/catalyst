@@ -13,6 +13,8 @@
 # limitations under the License.
 """This module contains the qjit device classes.
 """
+import inspect
+import logging
 from functools import partial
 from typing import Optional, Set
 
@@ -34,6 +36,9 @@ from catalyst.utils.toml import (
     check_adjoint_flag,
     check_mid_circuit_measurement_flag,
 )
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 RUNTIME_OPERATIONS = {
     "CNOT",
@@ -153,6 +158,15 @@ class QJITDevice(qml.QubitDevice):
         wires=None,
         backend: Optional[BackendInfo] = None,
     ):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"""Creating {self.__class__}(target_config=%s, shots=%s, wires=%s, backend=%s)""",
+                target_config,
+                shots,
+                wires,
+                backend,
+            )
+
         super().__init__(wires=wires, shots=shots)
 
         self.target_config = target_config
@@ -198,6 +212,16 @@ class QJITDevice(qml.QubitDevice):
             circuit: circuit to expand
             max_expansion: the maximum number of expansion steps if no fixed-point is reached.
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {repr(self)}(circuit=%s, max_expansion=%s) called by %s",
+                circuit,
+                max_expansion,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         # Ensure catalyst.measure is used instead of qml.measure.
         if any(isinstance(op, MidMeasureMP) for op in circuit.operations):
             raise CompileError("Must use 'measure' from Catalyst instead of PennyLane.")
@@ -264,6 +288,15 @@ class QJITDeviceNewAPI(qml.devices.Device):
         target_config: TOMLDocument,
         backend: Optional[BackendInfo] = None,
     ):
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"""Creating {self.__class__}(original_device=%s, target_config=%s, backend=%s)""",
+                original_device,
+                target_config,
+                backend,
+            )
+
         self.original_device = original_device
 
         for key, value in original_device.__dict__.items():

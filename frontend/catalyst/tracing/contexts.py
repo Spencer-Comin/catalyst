@@ -16,6 +16,8 @@
 This module provides context classes to manage and query Catalyst's and JAX's tracing state.
 """
 
+import inspect
+import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -34,6 +36,9 @@ from pennylane.queuing import QueuingManager
 
 from catalyst.jax_extras import new_dynamic_main2
 from catalyst.utils.exceptions import CompileError
+
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 
 
 class EvaluationMode(Enum):
@@ -70,6 +75,9 @@ class JaxTracingContext:
     trace: Optional[DynamicJaxprTrace]
 
     def __init__(self, main: JaxMainTrace):
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"""Creating {self.__class__}(main=%s)""", main)
+
         self.main, self.frames, self.mains, self.trace = main, {}, {}, None
 
 
@@ -87,12 +95,24 @@ class EvaluationContext:
         Args:
             mode: Evaluation mode of this instance
         """
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"""Creating {self.__class__}(EvaluationMode=%s)""", EvaluationMode)
+
         self.mode = mode
         self.ctx = None
 
     @classmethod
     @contextmanager
     def _create_tracing_context(cls, mode) -> ContextManager[JaxTracingContext]:
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {cls}(mode=%s) called by %s",
+                mode,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         with new_base_main(DynamicJaxprTrace, dynamic=True) as main:
             main.jaxpr_stack = ()
             cls._tracing_stack.append((mode, JaxTracingContext(main)))
@@ -104,6 +124,14 @@ class EvaluationContext:
     @classmethod
     @contextmanager
     def _create_interpretation_context(cls) -> ContextManager[JaxTracingContext]:
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {cls}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         cls._tracing_stack.append((EvaluationMode.INTERPRETATION, None))
         try:
             yield cls._tracing_stack[-1][1]
@@ -117,6 +145,16 @@ class EvaluationContext:
     ) -> ContextManager[DynamicJaxprTrace]:
         """Start a new JAX tracing frame, e.g. to trace a region of some
         :class:`~.jax_tracer.HybridOp`. Not applicable in non-tracing evaluation modes."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {cls}(ctx=%s, trace=%s) called by %s",
+                ctx,
+                trace,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         assert ctx is cls._tracing_stack[-1][1], f"{ctx=}"
         main = ctx.mains[trace] if trace is not None else None
         with new_dynamic_main2(DynamicJaxprTrace, main=main) as nmain:
@@ -135,11 +173,28 @@ class EvaluationContext:
     @classmethod
     def get_main_tracing_context(cls, hint=None) -> JaxTracingContext:
         """Return the current JAX tracing context, raise an exception if not in tracing mode."""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {cls}(hint=%s) called by %s",
+                hint,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         msg = f"{hint or 'catalyst functions'} can only be used from within @qjit decorated code."
         EvaluationContext.check_is_tracing(msg)
         return cls._tracing_stack[-1][1]
 
     def __enter__(self):
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         if self.mode in [EvaluationMode.QUANTUM_COMPILATION, EvaluationMode.CLASSICAL_COMPILATION]:
             self.ctx = self._create_tracing_context(self.mode)
         else:
@@ -153,6 +208,14 @@ class EvaluationContext:
     @classmethod
     def get_evaluation_mode(cls) -> Tuple[EvaluationMode, Optional[JaxTracingContext]]:
         """Return the name of the evaluation mode, paired with tracing context if applicable"""
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {cls}() called by %s",
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         if not EvaluationContext._tracing_stack:
             return (EvaluationMode.INTERPRETATION, None)
         return cls._tracing_stack[-1]

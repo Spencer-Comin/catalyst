@@ -19,6 +19,7 @@ arguments in the context of tracing.
 
 import enum
 import inspect
+import logging
 from typing import Callable
 
 import jax
@@ -26,13 +27,24 @@ from jax._src.interpreters.partial_eval import infer_lambda_input_type
 from jax._src.pjit import _flat_axes_specs
 from jax.api_util import shaped_abstractify
 from jax.tree_util import tree_flatten, tree_unflatten
+from pennylane.logging import TRACE
 
 from catalyst.jax_extras import get_aval2
 from catalyst.utils.patching import Patcher
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 
 def params_are_annotated(fn: Callable):
     """Return true if all parameters are typed-annotated, or no parameters are present."""
+    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+        logger.debug(
+            f"Entry with (fn=%s) called by %s",
+            (fn if not (logger.isEnabledFor(TRACE)) else "\n" + inspect.getsource(fn) + "\n"),
+            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
+        )
+
     assert isinstance(fn, Callable)
     signature = inspect.signature(fn)
     parameters = signature.parameters
