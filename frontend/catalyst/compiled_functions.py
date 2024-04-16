@@ -391,6 +391,16 @@ class CompiledFunction:
                 numpy arrays.
 
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(restype=%s, args=%s) called by %s",
+                restype,
+                args,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         numpy_arg_buffer = []
         return_value_pointer = ctypes.POINTER(ctypes.c_int)()  # This is the null pointer
 
@@ -430,11 +440,29 @@ class CompiledFunction:
 
     def get_cmain(self, *args):
         """Get a string representing a C program that can be linked against the shared object."""
-        _, buffer = self.args_to_memref_descs(self.restype, args)
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(args=%s) called by %s",
+                args,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
 
+        _, buffer = self.args_to_memref_descs(self.restype, args)
         return get_template(self.func_name, self.restype, *buffer)
 
     def __call__(self, *args, **kwargs):
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(args=%s, kwargs=%s) called by %s",
+                args,
+                kwargs,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         static_argnums = self.compile_options.static_argnums
         dynamic_args = filter_static_args(args, static_argnums)
 
@@ -510,6 +538,16 @@ class CompilationCache:
     """
 
     def __init__(self, static_argnums, abstracted_axes):
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(static_argnums=%s, abstracted_axes=%s) called by %s",
+                static_argnums,
+                abstracted_axes,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         self.static_argnums = static_argnums
         self.abstracted_axes = abstracted_axes
         self.cache = {}
@@ -528,6 +566,15 @@ class CompilationCache:
             TypeCompatibility
             CacheKey | None
         """
+        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
+            logger.debug(
+                f"Entry with {self}(args=%s) called by %s",
+                args,
+                "::L".join(
+                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
+                ),
+            )
+
         if not self.cache:
             return TypeCompatibility.NEEDS_COMPILATION, None
 
