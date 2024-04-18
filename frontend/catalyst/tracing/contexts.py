@@ -35,6 +35,7 @@ from jax.core import find_top_trace
 from pennylane.queuing import QueuingManager
 
 from catalyst.jax_extras import new_dynamic_main2
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.utils.exceptions import CompileError
 
 logger = logging.getLogger(__name__)
@@ -74,10 +75,8 @@ class JaxTracingContext:
     mains: Dict[DynamicJaxprTrace, JaxMainTrace]
     trace: Optional[DynamicJaxprTrace]
 
+    @debug_logger_init
     def __init__(self, main: JaxMainTrace):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"""Creating {self.__class__}(main=%s)""", main)
-
         self.main, self.frames, self.mains, self.trace = main, {}, {}, None
 
 
@@ -90,29 +89,19 @@ class EvaluationContext:
 
     _tracing_stack: List[Tuple[EvaluationMode, Optional[JaxTracingContext]]] = []
 
+    @debug_logger_init
     def __init__(self, mode: EvaluationMode):
         """Initialise a new instance of the Evaluation context.
         Args:
             mode: Evaluation mode of this instance
         """
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"""Creating {self.__class__}(EvaluationMode=%s)""", EvaluationMode)
-
         self.mode = mode
         self.ctx = None
 
     @classmethod
     @contextmanager
+    @debug_logger
     def _create_tracing_context(cls, mode) -> ContextManager[JaxTracingContext]:
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {cls}(mode=%s) called by %s",
-                mode,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         with new_base_main(DynamicJaxprTrace, dynamic=True) as main:
             main.jaxpr_stack = ()
             cls._tracing_stack.append((mode, JaxTracingContext(main)))
@@ -123,6 +112,7 @@ class EvaluationContext:
 
     @classmethod
     @contextmanager
+    @debug_logger
     def _create_interpretation_context(cls) -> ContextManager[JaxTracingContext]:
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
             logger.debug(
@@ -140,6 +130,7 @@ class EvaluationContext:
 
     @classmethod
     @contextmanager
+    @debug_logger
     def frame_tracing_context(
         cls, ctx: JaxTracingContext, trace: Optional[DynamicJaxprTrace] = None
     ) -> ContextManager[DynamicJaxprTrace]:
@@ -171,6 +162,7 @@ class EvaluationContext:
                     ctx.trace = parent_trace
 
     @classmethod
+    @debug_logger
     def get_main_tracing_context(cls, hint=None) -> JaxTracingContext:
         """Return the current JAX tracing context, raise an exception if not in tracing mode."""
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
@@ -186,15 +178,8 @@ class EvaluationContext:
         EvaluationContext.check_is_tracing(msg)
         return cls._tracing_stack[-1][1]
 
+    @debug_logger
     def __enter__(self):
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}() called by %s",
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         if self.mode in [EvaluationMode.QUANTUM_COMPILATION, EvaluationMode.CLASSICAL_COMPILATION]:
             self.ctx = self._create_tracing_context(self.mode)
         else:
@@ -206,6 +191,7 @@ class EvaluationContext:
         self.ctx.__exit__(*args, **kwargs)
 
     @classmethod
+    @debug_logger
     def get_evaluation_mode(cls) -> Tuple[EvaluationMode, Optional[JaxTracingContext]]:
         """Return the name of the evaluation mode, paired with tracing context if applicable"""
         if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
@@ -221,11 +207,13 @@ class EvaluationContext:
         return cls._tracing_stack[-1]
 
     @classmethod
+    @debug_logger
     def get_mode(cls):
         """Return the name of current evaluation mode."""
         return cls.get_evaluation_mode()[0]
 
     @classmethod
+    @debug_logger
     def is_tracing(cls):
         """Returns true or false depending on whether the execution is currently being
         traced.
@@ -236,6 +224,7 @@ class EvaluationContext:
         ]
 
     @classmethod
+    @debug_logger
     def is_quantum_tracing(cls):
         """Returns true or false depending on whether the execution is currently being
         traced.
@@ -243,6 +232,7 @@ class EvaluationContext:
         return cls.get_mode() == EvaluationMode.QUANTUM_COMPILATION
 
     @classmethod
+    @debug_logger
     def check_modes(cls, modes, msg):
         """Asserts if the execution mode is not among the expected ``modes``.
 
@@ -252,6 +242,7 @@ class EvaluationContext:
             raise CompileError(msg)
 
     @classmethod
+    @debug_logger
     def check_is_quantum_tracing(cls, msg):
         """Asserts if the current evaluation mode is quantum tracing.
 
@@ -260,6 +251,7 @@ class EvaluationContext:
         cls.check_modes([EvaluationMode.QUANTUM_COMPILATION], msg)
 
     @classmethod
+    @debug_logger
     def check_is_classical_tracing(cls, msg):
         """Asserts if the current evaluation mode is classical tracing.
 
@@ -268,6 +260,7 @@ class EvaluationContext:
         cls.check_modes([EvaluationMode.CLASSICAL_COMPILATION], msg)
 
     @classmethod
+    @debug_logger
     def check_is_tracing(cls, msg):
         """Asserts if the current evaluation mode is not a tracing.
 
@@ -278,6 +271,7 @@ class EvaluationContext:
         )
 
     @classmethod
+    @debug_logger
     def check_is_not_tracing(cls, msg):
         """Asserts if the current execution mode is a tracing.
 
@@ -287,6 +281,7 @@ class EvaluationContext:
             raise CompileError(msg)
 
     @classmethod
+    @debug_logger
     def find_jaxpr_frame(cls, *args):
         """Obtain the current JAXPR frame, in which primitives are being inserted.
 
@@ -296,6 +291,7 @@ class EvaluationContext:
         return find_top_trace(args).frame
 
     @classmethod
+    @debug_logger
     def find_quantum_queue(cls):
         """Obtain the current quantum queuing context, in which operations are being inserted.
 

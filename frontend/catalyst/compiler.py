@@ -34,6 +34,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from mlir_quantum.compiler_driver import run_compiler_driver
 from pennylane.logging import TRACE
 
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.utils.exceptions import CompileError
 from catalyst.utils.filesystem import Directory
 from catalyst.utils.runtime import get_lib_path
@@ -111,6 +112,7 @@ class CompileOptions:
         return DEFAULT_PIPELINES
 
 
+@debug_logger
 def run_writing_command(command: List[str], compile_options: Optional[CompileOptions]) -> None:
     """Run the command after optionally announcing this fact to the user.
 
@@ -122,13 +124,6 @@ def run_writing_command(command: List[str], compile_options: Optional[CompileOpt
     # This next step is redundant and should be replaced by the Python language logging framework
     if compile_options.verbose:
         print(f"[SYSTEM] {' '.join(command)}", file=compile_options.logfile)
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            'Entry with (command="%s", compile_options=%s) called by %s',
-            " ".join(command),
-            compile_options,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     subprocess.run(command, check=True)
 
@@ -268,6 +263,7 @@ class LinkerDriver:
     _default_fallback_compilers = ["clang", "gcc", "c99", "c89", "cc"]
 
     @staticmethod
+    @debug_logger
     def get_default_flags(options):
         """Re-compute the path where the libraries exist.
 
@@ -276,15 +272,6 @@ class LinkerDriver:
         Returns
             (List[str]): The default flag list.
         """
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                "Entry with (options=%s) called by %s",
-                options,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         mlir_lib_path = get_lib_path("llvm", "MLIR_LIB_DIR")
         rt_lib_path = get_lib_path("runtime", "RUNTIME_LIB_DIR")
@@ -378,17 +365,9 @@ class LinkerDriver:
         return default_flags
 
     @staticmethod
+    @debug_logger
     def _get_compiler_fallback_order(fallback_compilers):
         """Compiler fallback order"""
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                "Entry with (fallback_compilers=%s) called by %s",
-                fallback_compilers,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         preferred_compiler = os.environ.get("CATALYST_CC", None)
         preferred_compiler_exists = LinkerDriver._exists(preferred_compiler)
         compilers = fallback_compilers
@@ -427,6 +406,7 @@ class LinkerDriver:
             return False
 
     @staticmethod
+    @debug_logger
     def get_output_filename(infile):
         """Rename object file to shared object
 
@@ -434,21 +414,13 @@ class LinkerDriver:
             infile (str): input file name
             outfile (str): output file name
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                "Entry with (infile=%s) called by %s",
-                infile,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         infile_path = pathlib.Path(infile)
         if not infile_path.exists():
             raise FileNotFoundError(f"Cannot find {infile}.")
         return str(infile_path.with_suffix(".so"))
 
     @staticmethod
+    @debug_logger
     def run(infile, outfile=None, flags=None, fallback_compilers=None, options=None):
         """
         Link the infile against the necessary libraries and produce the outfile.
@@ -462,20 +434,6 @@ class LinkerDriver:
         Raises:
             EnvironmentError: The exception is raised when no compiler succeeded.
         """
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with (infile=%s, outfile=%s, flags=%s, fallback_compilers=%s, options=%s) called by %s",
-                infile,
-                outfile,
-                flags,
-                fallback_compilers,
-                options,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         if outfile is None:
             outfile = LinkerDriver.get_output_filename(infile)
         if options is None:
@@ -496,16 +454,12 @@ class LinkerDriver:
 class Compiler:
     """Compiles MLIR modules to shared objects by executing the Catalyst compiler driver library."""
 
+    @debug_logger_init
     def __init__(self, options: Optional[CompileOptions] = None):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"""Creating {self.__class__}(options=%s)""",
-                options,
-            )
-
         self.options = options if options is not None else CompileOptions()
         self.last_compiler_output = None
 
+    @debug_logger
     def run_from_ir(self, ir: str, module_name: str, workspace: Directory):
         """Compile a shared object from a textual IR (MLIR or LLVM).
 
@@ -523,17 +477,6 @@ class Compiler:
                func_name (str) Inferred name of the main function
                ret_type_name (str) Inferred main function result type name
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(ir=%s, module_name=%s, workspace=%s) called by %s",
-                ir,
-                module_name,
-                workspace,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         assert isinstance(
             workspace, Directory
         ), f"Compiler expects a Directory type, got {type(workspace)}."
@@ -585,6 +528,7 @@ class Compiler:
         self.last_compiler_output = compiler_output
         return output_filename, out_IR, [func_name, ret_type_name]
 
+    @debug_logger
     def run(self, mlir_module, *args, **kwargs):
         """Compile an MLIR module to a shared object.
 
@@ -599,17 +543,6 @@ class Compiler:
         Returns:
             (str): filename of shared object
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(mlir_module=%s, args=%s, kwargs=%s) called by %s",
-                (repr(mlir_module) if not (logger.isEnabledFor(TRACE)) else mlir_module),
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         return self.run_from_ir(
             mlir_module.operation.get_asm(
                 binary=False, print_generic_op_form=False, assume_verified=True
@@ -619,6 +552,7 @@ class Compiler:
             **kwargs,
         )
 
+    @debug_logger
     def get_output_of(self, pipeline) -> Optional[str]:
         """Get the output IR of a pipeline.
         Args:
@@ -627,15 +561,6 @@ class Compiler:
         Returns
             (Optional[str]): output IR
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(pipeline=%s) called by %s",
-                pipeline,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         if len(dict(self.options.get_pipelines()).get(pipeline, [])) == 0:
             warnings.warn("Requesting an output of an empty pipeline")  # pragma: no cover
 

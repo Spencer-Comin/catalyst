@@ -23,6 +23,7 @@ from pennylane.devices.preprocess import decompose
 from pennylane.measurements import MidMeasureMP
 from pennylane.transforms.core import TransformProgram
 
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.preprocess import catalyst_acceptance, decompose_ops_to_unitary
 from catalyst.utils.exceptions import CompileError
 from catalyst.utils.patching import Patcher
@@ -95,6 +96,7 @@ RUNTIME_OPERATIONS = {
 }
 
 
+@debug_logger
 def get_qjit_pennylane_operations(
     config: TOMLDocument, shots_present: bool, device_name: str
 ) -> Set[str]:
@@ -151,6 +153,7 @@ class QJITDevice(qml.QubitDevice):
         # TODO: https://github.com/PennyLaneAI/catalyst/issues/398
         return {"MultiControlledX", "BlockEncode"}
 
+    @debug_logger_init
     def __init__(
         self,
         target_config: TOMLDocument,
@@ -158,15 +161,6 @@ class QJITDevice(qml.QubitDevice):
         wires=None,
         backend: Optional[BackendInfo] = None,
     ):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"""Creating {self.__class__}(target_config=%s, shots=%s, wires=%s, backend=%s)""",
-                target_config,
-                shots,
-                wires,
-                backend,
-            )
-
         super().__init__(wires=wires, shots=shots)
 
         self.target_config = target_config
@@ -195,6 +189,7 @@ class QJITDevice(qml.QubitDevice):
         """
         raise RuntimeError("QJIT devices cannot apply operations.")  # pragma: no cover
 
+    @debug_logger
     def default_expand_fn(self, circuit, max_expansion=10):
         """
         Most decomposition logic will be equivalent to PennyLane's decomposition.
@@ -212,16 +207,6 @@ class QJITDevice(qml.QubitDevice):
             circuit: circuit to expand
             max_expansion: the maximum number of expansion steps if no fixed-point is reached.
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {repr(self)}(circuit=%s, max_expansion=%s) called by %s",
-                circuit,
-                max_expansion,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         # Ensure catalyst.measure is used instead of qml.measure.
         if any(isinstance(op, MidMeasureMP) for op in circuit.operations):
             raise CompileError("Must use 'measure' from Catalyst instead of PennyLane.")
@@ -282,21 +267,13 @@ class QJITDeviceNewAPI(qml.devices.Device):
         # TODO: https://github.com/PennyLaneAI/catalyst/issues/398
         return {"MultiControlledX", "BlockEncode"}
 
+    @debug_logger_init
     def __init__(
         self,
         original_device,
         target_config: TOMLDocument,
         backend: Optional[BackendInfo] = None,
     ):
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"""Creating {self.__class__}(original_device=%s, target_config=%s, backend=%s)""",
-                original_device,
-                target_config,
-                backend,
-            )
-
         self.original_device = original_device
 
         for key, value in original_device.__dict__.items():
@@ -323,6 +300,7 @@ class QJITDeviceNewAPI(qml.devices.Device):
         """Get the device observables"""
         return self._observables
 
+    @debug_logger
     def preprocess(
         self,
         execution_config: qml.devices.ExecutionConfig = qml.devices.DefaultExecutionConfig,

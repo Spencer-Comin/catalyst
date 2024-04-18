@@ -36,6 +36,7 @@ from jax.interpreters.mlir import (
     lowerable_effects,
 )
 
+from catalyst.logging import debug_logger
 from catalyst.utils.patching import Patcher
 
 # pylint: disable=protected-access
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
+@debug_logger
 def jaxpr_to_mlir(func_name, jaxpr):
     """Lower a Jaxpr into an MLIR module.
 
@@ -59,15 +61,6 @@ def jaxpr_to_mlir(func_name, jaxpr):
         module: the MLIR module corresponding to ``func``
         context: the MLIR context corresponding
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f'Entry with (func_name=%s, jaxpr="\n%s\n") called by %s',
-            func_name,
-            jaxpr,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
-
     with Patcher(
         (jax._src.interpreters.partial_eval, "get_aval", get_aval2),
         (jax._src.core, "clean_up_dead_vars", _no_clean_up_dead_vars),
@@ -90,6 +83,7 @@ def jaxpr_to_mlir(func_name, jaxpr):
 
 
 # pylint: disable=too-many-arguments
+@debug_logger
 def custom_lower_jaxpr_to_module(
     func_name: str,
     module_name: str,
@@ -113,21 +107,6 @@ def custom_lower_jaxpr_to_module(
 
     Copyright 2021 The JAX Authors.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (func_name=%s, module_name=%s, jaxpr=%s, effects=%s, platform=%s, axis_context=%s, name_stack=%s, replicated_args=%s, arg_shardings=%s, result_shardings=%s) called by %s",
-            func_name,
-            module_name,
-            jaxpr,
-            effects,
-            platform,
-            axis_context,
-            name_stack,
-            replicated_args,
-            arg_shardings,
-            result_shardings,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     if any(lowerable_effects.filter_not_in(jaxpr.effects)):  # pragma: no cover
         raise ValueError(f"Cannot lower jaxpr with effects: {jaxpr.effects}")

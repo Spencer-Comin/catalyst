@@ -34,6 +34,7 @@ from catalyst.autograph import run_autograph
 from catalyst.compiled_functions import CompilationCache, CompiledFunction
 from catalyst.compiler import CompileOptions, Compiler
 from catalyst.jax_tracer import lower_jaxpr_to_mlir, trace_to_jaxpr
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.tracing.contexts import EvaluationContext
 from catalyst.tracing.type_signatures import (
     filter_static_args,
@@ -115,19 +116,9 @@ class QJIT:
         if self.user_sig is not None and not self.compile_options.static_argnums:
             self.aot_compile()
 
+    @debug_logger
     def __call__(self, *args, **kwargs):
         # Transparantly call Python function in case of nested QJIT calls.
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(args=%s, kwargs=%s) called by %s",
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         if EvaluationContext.is_tracing():
             return self.user_function(*args, **kwargs)
 
@@ -145,6 +136,7 @@ class QJIT:
 
         return self.run(args, kwargs)
 
+    @debug_logger
     def aot_compile(self):
         """Compile Python function on initialization using the type hint signature."""
 
@@ -163,6 +155,7 @@ class QJIT:
                 self.compiled_function, self.user_sig, self.out_treedef, self.workspace
             )
 
+    @debug_logger
     def jit_compile(self, args):
         """Compile Python function on invocation using the provided arguments.
 
@@ -173,15 +166,6 @@ class QJIT:
             bool: whether the provided arguments will require promotion to be used with the compiled
                   function
         """
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(args=%s) called by %s",
-                args,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         cached_fn, requires_promotion = self.fn_cache.lookup(args)
 
@@ -219,6 +203,7 @@ class QJIT:
 
     # Processing Stages #
 
+    @debug_logger
     def pre_compilation(self):
         """Perform pre-processing tasks on the Python function, such as AST transformations."""
         processed_fn = self.original_function
@@ -228,6 +213,7 @@ class QJIT:
 
         return processed_fn
 
+    @debug_logger
     def capture(self, args):
         """Capture the JAX program representation (JAXPR) of the wrapped function.
 
@@ -239,15 +225,6 @@ class QJIT:
             PyTreeDef: PyTree metadata of the function output
             Tuple[Any]: the dynamic argument signature
         """
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(args=%s) called by %s",
-                args,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         self._verify_static_argnums(args)
         static_argnums = self.compile_options.static_argnums
@@ -267,6 +244,7 @@ class QJIT:
 
         return jaxpr, treedef, dynamic_sig
 
+    @debug_logger
     def generate_ir(self):
         """Generate Catalyst's intermediate representation (IR) as an MLIR module.
 
@@ -290,6 +268,7 @@ class QJIT:
 
         return mlir_module, mlir_string
 
+    @debug_logger
     def compile(self):
         """Compile an MLIR module to LLVMIR and shared library code.
 
@@ -317,6 +296,7 @@ class QJIT:
 
         return compiled_fn, llvm_ir
 
+    @debug_logger
     def run(self, args, kwargs):
         """Invoke a previously compiled function with the supplied arguments.
 
@@ -327,17 +307,6 @@ class QJIT:
         Returns:
             Any: results of the execution arranged into the original function's output PyTrees
         """
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(args=%s, kwargs=%s) called by %s",
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         results = self.compiled_function(*args, **kwargs)
 
         # TODO: Move this to the compiled function object.
@@ -401,19 +370,9 @@ class JAX_QJIT:
         jaxed_function.defjvp(self.compute_jvp, symbolic_zeros=True)
 
     @staticmethod
+    @debug_logger
     def wrap_callback(qjit_function, *args, **kwargs):
         """Wrap a QJIT function inside a jax host callback."""
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(qjit_function=%s, args=%s, kwargs=%s) called by %s",
-                qjit_function,
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         data = jax.pure_callback(
             qjit_function, qjit_function.jaxpr.out_avals, *args, vectorized=False, **kwargs
@@ -423,17 +382,9 @@ class JAX_QJIT:
         assert qjit_function.out_treedef is not None, "PyTree shape must not be none."
         return tree_unflatten(qjit_function.out_treedef, data)
 
+    @debug_logger
     def get_derivative_qjit(self, argnums):
         """Compile a function computing the derivative of the wrapped QJIT for the given argnums."""
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(argnums=%s) called by %s",
-                argnums,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         argnum_key = "".join(str(idx) for idx in argnums)
         if argnum_key in self.derivative_functions:
@@ -462,6 +413,7 @@ class JAX_QJIT:
         )
         return self.derivative_functions[argnum_key]
 
+    @debug_logger
     def compute_jvp(self, primals, tangents):
         """Compute the set of results and JVPs for a QJIT function."""
         # Assume we have primals of shape `[a,b]` and results of shape `[c,d]`. Derivatives [2]
@@ -504,6 +456,7 @@ class JAX_QJIT:
         return self.jaxed_function(*args, **kwargs)
 
 
+@debug_logger
 def qjit(
     fn=None,
     *,
@@ -805,22 +758,6 @@ def qjit(
         the ``sum_abstracted`` function would only compile once and its definition would be
         reused for subsequent function calls.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (fn=%s, autograph=%s, async_qnodes=%s, target=%s, keep_intermediate=%s, verbose=%s, logfile=%s, pipelines=%s, static_argnums=%s, abstracted_axes=%s) called by %s",
-            fn,
-            autograph,
-            async_qnodes,
-            target,
-            keep_intermediate,
-            verbose,
-            logfile,
-            pipelines,
-            static_argnums,
-            abstracted_axes,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
-
     argnums = static_argnums
     axes = abstracted_axes
     if fn is not None:

@@ -91,6 +91,7 @@ from catalyst.jax_tracer import (
     trace_quantum_tape,
     unify_jaxpr_result_types,
 )
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.qjit_device import QJITDevice, QJITDeviceNewAPI
 from catalyst.tracing.contexts import (
     EvaluationContext,
@@ -142,27 +143,20 @@ class QFunc:
             the valid gate set for the quantum function
     """
 
+    @debug_logger_init
     def __init__(self, fn, device):  # pragma: nocover
         self.func = fn
         self.device = device
         update_wrapper(self, fn)
 
     @staticmethod
+    @debug_logger
     def extract_backend_info(device: qml.QubitDevice, config: TOMLDocument) -> BackendInfo:
         """Wrapper around extract_backend_info in the runtime module."""
         return extract_backend_info(device, config)
 
+    @debug_logger
     def __call__(self, *args, **kwargs):
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(*args=%s, **kwargs=%s) called by %s",
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         qnode = None
         if isinstance(self, qml.QNode):
             qnode = self
@@ -178,16 +172,8 @@ class QFunc:
             # Allow QFunc to still be used by itself for internal testing.
             device = self.device
 
+        @debug_logger
         def _eval_quantum(*args):
-            if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-                logger.debug(
-                    "Entry with (args=%s) called by %s",
-                    args,
-                    "::L".join(
-                        str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                    ),
-                )
-
             closed_jaxpr, out_type, out_tree = trace_quantum_function(
                 self.func, device, args, kwargs, qnode
             )
@@ -423,11 +409,13 @@ class Grad:
         TypeError: Non-differentiable object was passed as `fn` argument.
     """
 
+    @debug_logger_init
     def __init__(self, fn: Differentiable, grad_params: GradParams):
         self.fn = fn
         self.__name__ = f"grad.{getattr(fn, '__name__', 'unknown')}"
         self.grad_params = grad_params
 
+    @debug_logger
     def __call__(self, *args, **kwargs):
         """Specifies that an actual call to the differentiated function.
         Args:
@@ -478,6 +466,7 @@ class Grad:
         return results
 
 
+@debug_logger
 def grad(f: DifferentiableLike, *, method=None, h=None, argnum=None):
     """A :func:`~.qjit` compatible gradient transformation for PennyLane/Catalyst.
 
@@ -608,6 +597,7 @@ def grad(f: DifferentiableLike, *, method=None, h=None, argnum=None):
     return Grad(f, GradParams(method, scalar_out, h, argnum))
 
 
+@debug_logger
 def value_and_grad(f: DifferentiableLike, *, method=None, h=None, argnum=None):
     """A :func:`~.qjit` compatible gradient transformation for PennyLane/Catalyst.
 
@@ -713,6 +703,7 @@ def value_and_grad(f: DifferentiableLike, *, method=None, h=None, argnum=None):
     return Grad(f, GradParams(method, scalar_out, h, argnum, with_value=True))
 
 
+@debug_logger
 def jacobian(f: DifferentiableLike, *, method=None, h=None, argnum=None):
     """A :func:`~.qjit` compatible Jacobian transformation for PennyLane/Catalyst.
 
@@ -779,6 +770,7 @@ def jacobian(f: DifferentiableLike, *, method=None, h=None, argnum=None):
 
 
 # pylint: disable=too-many-arguments
+@debug_logger
 def jvp(f: DifferentiableLike, params, tangents, *, method=None, h=None, argnum=None):
     """A :func:`~.qjit` compatible Jacobian-vector product for PennyLane/Catalyst.
 
@@ -882,6 +874,7 @@ def jvp(f: DifferentiableLike, params, tangents, *, method=None, h=None, argnum=
 
 
 # pylint: disable=too-many-arguments
+@debug_logger
 def vjp(f: DifferentiableLike, params, cotangents, *, method=None, h=None, argnum=None):
     """A :func:`~.qjit` compatible Vector-Jacobian product for PennyLane/Catalyst.
 
@@ -983,6 +976,7 @@ class ZNE:
         TypeError: Non-QNode object was passed as `fn`.
     """
 
+    @debug_logger_init
     def __init__(self, fn: Callable, scale_factors: jnp.ndarray, deg: int):
         if not isinstance(fn, qml.QNode):
             raise TypeError(f"A QNode is expected, got the classical function {fn}")
@@ -991,6 +985,7 @@ class ZNE:
         self.scale_factors = scale_factors
         self.deg = deg
 
+    @debug_logger
     def __call__(self, *args, **kwargs):
         """Specifies the an actual call to the folded circuit."""
         jaxpr = jaxpr = jax.make_jaxpr(self.fn)(*args)
@@ -1012,6 +1007,7 @@ class ZNE:
         return tuple(res for res in results)
 
 
+@debug_logger
 def mitigate_with_zne(f, *, scale_factors: jnp.ndarray, deg: int = None):
     """A :func:`~.qjit` compatible error mitigation of an input circuit using zero-noise
     extrapolation.
@@ -1350,6 +1346,7 @@ class QCtrl(HybridOp):
         return self
 
 
+@debug_logger
 def qctrl_distribute(
     tape: QuantumTape,
     control_wires: List[Any],

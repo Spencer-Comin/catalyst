@@ -183,7 +183,6 @@ while processing the following with AutoGraph:
     for x in params:
 """
 
-
 __all__ = (
     "qjit",
     "QJIT",
@@ -207,4 +206,5 @@ __all__ = (
     "AutoGraphError",
     "CompileError",
     "CompileOptions",
+    "logging",
 )

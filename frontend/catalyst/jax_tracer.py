@@ -80,6 +80,7 @@ from catalyst.jax_primitives import (
     tensorobs_p,
     var_p,
 )
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.tracing.contexts import (
     EvaluationContext,
     EvaluationMode,
@@ -134,18 +135,11 @@ PAULI_NAMED_MAP = {
 }
 
 
+@debug_logger
 def retrace_with_result_types(jaxpr: ClosedJaxpr, target_types: List[ShapedArray]) -> ClosedJaxpr:
     """Return a JAXPR that is identical to the given one but with added type conversion operations
     to produce the provided type signature in its output."""
     # TODO: is eval expensive? or would it be better to modify the jaxpr in place?
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (jaxpr=%s, target_types=%s) called by %s",
-            jaxpr,
-            target_types,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     with_qreg = isinstance(target_types[-1], AbstractQreg)
     with EvaluationContext(EvaluationMode.CLASSICAL_COMPILATION) as ctx:
@@ -167,6 +161,7 @@ def retrace_with_result_types(jaxpr: ClosedJaxpr, target_types: List[ShapedArray
     return ClosedJaxpr(jaxpr2, consts)
 
 
+@debug_logger
 def unify_jaxpr_result_types(jaxprs: List[ClosedJaxpr]) -> List[ClosedJaxpr]:
     """Unify result signatures across a set of JAXPRs by promoting to common types.
 
@@ -181,13 +176,6 @@ def unify_jaxpr_result_types(jaxprs: List[ClosedJaxpr]) -> List[ClosedJaxpr]:
     Raises:
         TypePromotionError: Type unification via promotion was not possible.
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (jaxprs=%s) called by %s",
-            jaxprs,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     out_signatures = [jaxpr.out_avals for jaxpr in jaxprs]
     assert all(len(out_sig) == len(out_signatures[0]) for out_sig in out_signatures)
@@ -210,30 +198,15 @@ class QRegPromise:
     """QReg adaptor tracing the qubit extractions and insertions. The adaptor works by postponing
     the insertions in order to re-use qubits later thus skipping the extractions."""
 
+    @debug_logger_init
     def __init__(self, qreg: DynamicJaxprTracer):
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"""Creating {self.__class__}(qreg=%s)""",
-                qreg,
-            )
-
         self.base: DynamicJaxprTracer = qreg
         self.cache: Dict[Any, DynamicJaxprTracer] = {}
 
+    @debug_logger
     def extract(self, wires: List[Any], allow_reuse=False) -> List[DynamicJaxprTracer]:
         """Extract qubits from the wrapped quantum register or get the already extracted qubits
         from cache"""
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(wires=%s, allow_reuse=%s) called by %s",
-                wires,
-                allow_reuse,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         # pylint: disable=consider-iterating-dictionary
         qrp = self
         cached_tracers = {w for w in qrp.cache.keys() if not isinstance(w, int)}
@@ -254,18 +227,9 @@ class QRegPromise:
                 qubits.append(qextract_p.bind(qrp.base, w))
         return qubits
 
+    @debug_logger
     def insert(self, wires, qubits) -> None:
         """Insert qubits to the cache."""
-
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}(wires=%s, qubits=%s) called by %s",
-                wires,
-                qubits,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         qrp = self
         assert len(wires) == len(qubits), f"len(wires)({len(wires)}) != len(qubits)({len(qubits)})"
@@ -275,15 +239,9 @@ class QRegPromise:
             ), f"Attempting to insert an already-inserted wire {w} into {qrp.base}"
             qrp.cache[w] = qubit
 
+    @debug_logger
     def actualize(self) -> DynamicJaxprTracer:
         """Prune the qubit cache by performing the postponed insertions."""
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with {self}() called by %s",
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         qrp = self
         qreg = qrp.base
@@ -338,15 +296,8 @@ class HybridOp(Operation):
     num_wires = AnyWires
     binder: Callable = _no_binder
 
+    @debug_logger_init
     def __init__(self, in_classical_tracers, out_classical_tracers, regions: List[HybridOpRegion]):
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"""Creating {self.__class__}(in_classical_tracers=%s, out_classical_tracers=%s, regions=%s)""",
-                in_classical_tracers,
-                out_classical_tracers,
-                regions,
-            )
 
         self.in_classical_tracers = in_classical_tracers
         self.out_classical_tracers = out_classical_tracers
@@ -358,6 +309,7 @@ class HybridOp(Operation):
         nested_ops = [r.quantum_tape.operations for r in self.regions if r.quantum_tape]
         return f"{self.name}(tapes={nested_ops})"
 
+    @debug_logger
     def bind_overwrite_classical_tracers(
         self, ctx: JaxTracingContext, trace: DynamicJaxprTrace, *args, **kwargs
     ) -> DynamicJaxprTracer:
@@ -369,18 +321,6 @@ class HybridOp(Operation):
         # [2] - We add the already existing classical tracers into the last JAX equation created by
         #       JAX bind handler of the ``trace`` object.
 
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                f"Entry with (ctx=%s, trace=%s, args=%s, kwargs=%s) called by %s",
-                ctx,
-                trace,
-                args,
-                kwargs,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         assert self.binder is not None, "HybridOp should set a binder"
         out_quantum_tracer = self.binder(*args, **kwargs)[-1]  # [1]
         eqn = ctx.frames[trace].eqns[-1]
@@ -389,6 +329,7 @@ class HybridOp(Operation):
             eqn.outvars[i] = trace.getvar(t)
         return out_quantum_tracer
 
+    @debug_logger
     def trace_quantum(
         self,
         ctx: JaxTracingContext,
@@ -400,6 +341,7 @@ class HybridOp(Operation):
         raise NotImplementedError("HybridOp should implement trace")  # pragma: no cover
 
 
+@debug_logger
 def has_nested_tapes(op: Operation) -> bool:
     """Detects if the PennyLane operation holds nested quantum tapes or not."""
     return (
@@ -409,6 +351,7 @@ def has_nested_tapes(op: Operation) -> bool:
     )
 
 
+@debug_logger
 def trace_to_jaxpr(func, static_argnums, abstracted_axes, args, kwargs):
     """Trace a Python function to JAXPR.
 
@@ -424,18 +367,6 @@ def trace_to_jaxpr(func, static_argnums, abstracted_axes, args, kwargs):
         ClosedJaxpr: the Jaxpr program corresponding to ``func``
         PyTreeDef: PyTree-shape of the return values in ``PyTreeDef``
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (func=%s, static_argnums=%s, abstracted_axes=%s, args=%s, kwargs=%s) called by %s",
-            func,
-            static_argnums,
-            abstracted_axes,
-            args,
-            kwargs,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
-
     with transient_jax_config():
         with EvaluationContext(EvaluationMode.CLASSICAL_COMPILATION):
             make_jaxpr_kwargs = {
@@ -447,6 +378,7 @@ def trace_to_jaxpr(func, static_argnums, abstracted_axes, args, kwargs):
     return jaxpr, out_treedef
 
 
+@debug_logger
 def lower_jaxpr_to_mlir(jaxpr, func_name):
     """Lower a JAXPR to MLIR.
 
@@ -458,14 +390,6 @@ def lower_jaxpr_to_mlir(jaxpr, func_name):
         ir.Module: the MLIR module coontaining the JAX program
         ir.Context: the MLIR context
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (jaxpr=%s, func_name=%s) called by %s",
-            jaxpr,
-            func_name,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     # The compilation cache must be clear for each translation unit. Otherwise, MLIR functions
     # which do not exist in the current translation unit will be assumed to exist if an equivalent
@@ -483,6 +407,7 @@ def lower_jaxpr_to_mlir(jaxpr, func_name):
     return mlir_module, ctx
 
 
+@debug_logger
 def trace_quantum_tape(
     quantum_tape: QuantumTape,
     device: QubitDevice,
@@ -504,16 +429,6 @@ def trace_quantum_tape(
         qrp: QRegPromise object holding the JAX tracer representing the quantum register into its
              final state.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (quantum_tape=%s, device=%s, qreg=%s, ctx=%s, trace=%s) called by %s",
-            quantum_tape,
-            repr(device),
-            qreg,
-            ctx,
-            trace,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     # Notes:
     # [1] - At this point JAX equation contains both equations added during the classical tracing
@@ -587,6 +502,7 @@ def trace_quantum_tape(
     return qrp
 
 
+@debug_logger
 def trace_observables(
     obs: Operation, qrp: QRegPromise, m_wires: int
 ) -> Tuple[List[DynamicJaxprTracer], Optional[int]]:
@@ -601,15 +517,6 @@ def trace_observables(
         out_classical_tracers: a list of classical tracers corresponding to the measured values.
         nqubits: number of actually measured qubits.
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (obs=%s, qrp=%s, m_wires=%s) called by %s",
-            obs,
-            qrp,
-            m_wires,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     wires = obs.wires if (obs and len(obs.wires) > 0) else m_wires
     qubits = None
@@ -650,6 +557,7 @@ def trace_observables(
     return obs_tracers, (len(qubits) if qubits else None)
 
 
+@debug_logger
 def pauli_sentence_to_hamiltonian_obs(paulis, qrp: QRegPromise) -> List[DynamicJaxprTracer]:
     """Convert a :class:`pennylane.pauli.PauliSentence` into a Hamiltonian.
 
@@ -660,14 +568,6 @@ def pauli_sentence_to_hamiltonian_obs(paulis, qrp: QRegPromise) -> List[DynamicJ
     Returns:
         List of JAX tracers representing a Hamiltonian
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (paulis=%s, qrp=%s) called by %s",
-            paulis,
-            qrp,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     pwords, coeffs = zip(*paulis.items())
     nested_obs = [pauli_word_to_tensor_obs(pword, qrp) for pword in pwords]
@@ -680,6 +580,7 @@ def pauli_sentence_to_hamiltonian_obs(paulis, qrp: QRegPromise) -> List[DynamicJ
     return hamiltonian_p.bind(coeffs, *nested_obs)
 
 
+@debug_logger
 def pauli_word_to_tensor_obs(obs, qrp: QRegPromise) -> List[DynamicJaxprTracer]:
     """Convert a :class:`pennylane.pauli.PauliWord` into a Named or Tensor observable.
 
@@ -690,13 +591,6 @@ def pauli_word_to_tensor_obs(obs, qrp: QRegPromise) -> List[DynamicJaxprTracer]:
     Returns:
         List of JAX tracers representing NamedObs or TensorObs
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (obs=%s, qrp=%s) called by %s",
-            obs,
-            qrp,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     if len(obs) == 1:
         wire, pauli = list(obs.items())[0]
@@ -716,6 +610,7 @@ def identity_qnode_transform(tape: QuantumTape) -> (Sequence[QuantumTape], Calla
     return [tape], lambda res: res[0]
 
 
+@debug_logger
 def trace_quantum_measurements(
     device: QubitDevice,
     qrp: QRegPromise,
@@ -736,16 +631,6 @@ def trace_quantum_measurements(
         out_classical_tracers: modified list of JAX classical qnode ouput tracers.
         out_tree: modified PyTree-shape of the qnode output.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (device=%s, qrp=%s, outputs=%s, out_tree=%s, tape=%s) called by %s",
-            repr(device),
-            qrp,
-            outputs,
-            out_tree,
-            tape,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     # pylint: disable=too-many-branches
     if isinstance(device, qml.Device):
@@ -808,6 +693,7 @@ def trace_quantum_measurements(
     return out_classical_tracers, out_tree
 
 
+@debug_logger
 def is_transform_valid_for_batch_transforms(tape, flat_results):
     """Not all transforms are valid for batch transforms.
     Batch transforms will increase the number of tapes from 1 to N.
@@ -817,14 +703,6 @@ def is_transform_valid_for_batch_transforms(tape, flat_results):
     Also, MidCircuitMeasure is a HybridOp, which PL does not handle at the moment.
     Let's wait until mid-circuit measurements are better integrated into both PL
     and Catalyst and discussed more as well."""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (tape=%s, flat_results=%s) called by %s",
-            tape,
-            flat_results,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     class_tracers, meas_tracers = split_tracers_and_measurements(flat_results)
 
@@ -860,18 +738,11 @@ def is_transform_valid_for_batch_transforms(tape, flat_results):
     return are_batch_transforms_valid
 
 
+@debug_logger
 def apply_transform(transform_program, tape, flat_results):
     """Apply transform."""
     # Some transforms use trainability as a basis for transforming.
     # See batch_params
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (transform_program=%s, flat_results=%s) called by %s",
-            transform_program,
-            flat_results,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     params = tape.get_parameters(trainable_only=False)
     tape.trainable_params = qml.math.get_trainable_indices(params)
@@ -894,15 +765,9 @@ def apply_transform(transform_program, tape, flat_results):
     return tapes, post_processing
 
 
+@debug_logger
 def split_tracers_and_measurements(flat_values):
     """Return classical tracers and measurements"""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (flat_values=%s) called by %s",
-            flat_values,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     classical = []
     measurements = []
@@ -919,6 +784,7 @@ def split_tracers_and_measurements(flat_values):
     return classical, measurements
 
 
+@debug_logger
 def trace_post_processing(ctx, trace, post_processing: Callable, pp_args):
     """Trace post processing function.
 
@@ -934,16 +800,6 @@ def trace_post_processing(ctx, trace, post_processing: Callable, pp_args):
         out_type(jax.OutputType) : List of abstract values with explicitness flag
         out_tree(PyTreeDef): PyTree shape of the qnode result
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (ctx=%s, trace=%s, post_processing=%s, pp_args=%s) called by %s",
-            ctx,
-            trace,
-            post_processing,
-            pp_args,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     with EvaluationContext.frame_tracing_context(ctx, trace):
         # What is the input to the post_processing function?
@@ -962,17 +818,10 @@ def trace_post_processing(ctx, trace, post_processing: Callable, pp_args):
         return closed_jaxpr, out_type, out_tree_promise()
 
 
+@debug_logger
 def reset_qubit(qreg_in, w):
     """Perform a qubit reset on a single wire. Suitable for use during late-stage tracing,
     as JAX primitives are used directly. These operations will not appear on tape."""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            f"Entry with (qreg_in=%s, w=%s) called by %s",
-            qreg_in,
-            w,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     def flip(qreg):
         """Flip a qubit."""

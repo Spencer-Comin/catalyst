@@ -64,6 +64,7 @@ from jax.tree_util import (
 from jaxlib.xla_extension import PyTreeRegistry
 
 from catalyst.jax_extras.patches import _gather_shape_rule_dynamic, get_aval2
+from catalyst.logging import debug_logger, debug_logger_init
 from catalyst.utils.patching import Patcher
 
 # pylint: disable=protected-access
@@ -111,34 +112,18 @@ class DynshapedClosedJaxpr(ClosedJaxpr):
     """A wrapper class to handle implicit/explicit result information used by JAX for dynamically
     shaped arrays. Can be used inplace of any other ClosedJaxpr instance."""
 
+    @debug_logger_init
     def __init__(self, jaxpr: Jaxpr, consts: Sequence, output_type: OutputType):
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                "Entry with {self}(jaxpr=%s, consts=%s, output_type=%s) called by %s",
-                jaxpr,
-                consts,
-                output_type,
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
-
         super().__init__(jaxpr, consts)
         self.output_type = output_type
 
+    @debug_logger
     def remove_implicit_results(self):
         """Remove all implicit result values from this JAXPR.
 
         Returns:
             ClosedJaxpr
         """
-        if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-            logger.debug(
-                "Entry with {self}() called by %s",
-                "::L".join(
-                    str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]
-                ),
-            )
 
         # Note: a more idiomatic way of doing this would be to re-trace the jaxpr and drop the
         # unneeded tracers.
@@ -155,16 +140,12 @@ class DynshapedClosedJaxpr(ClosedJaxpr):
         return ClosedJaxpr(filtered_jaxpr, self.consts)
 
 
+@debug_logger
 @contextmanager
 def transient_jax_config() -> Generator[None, None, None]:
     """Context manager which updates transient JAX configuration options,
     yields, and then restores the original configuration values.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with () called by %s",
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     want_vals = {"jax_dynamic_shapes": True}
     prev_vals = {}
@@ -181,6 +162,7 @@ def transient_jax_config() -> Generator[None, None, None]:
         jax.config.update(name, val)
 
 
+@debug_logger
 @contextmanager
 def new_dynamic_main2(
     trace_type: Type[Trace],
@@ -189,15 +171,6 @@ def new_dynamic_main2(
 ) -> Generator[MainTrace, None, None]:
     """A verison of JAX `new_main` function that knows how to re-use an already existing `MainTrace`
     object"""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (trace_type=%s, main=%s, payload=%s) called by %s",
-            trace_type,
-            main,
-            payload,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     stack = thread_local_state.trace_state.trace_stack
     level = stack.next_level() if main is None else main.level
@@ -214,18 +187,13 @@ def new_dynamic_main2(
         _update_thread_local_jit_state(stack.dynamic)
 
 
+@debug_logger
 def stable_toposort(end_nodes: list) -> list:
     """Stable topology sorting. Input objects are required to have `id` and `parents` members.
 
     Args:
         end_nodes (List of objects): Objects to sort
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (end_nodes=%s) called by %s",
-            end_nodes,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     if not end_nodes:
         return []
@@ -264,17 +232,10 @@ def stable_toposort(end_nodes: list) -> list:
     return sorted_nodes
 
 
+@debug_logger
 def sort_eqns(eqns: List[JaxprEqn], forced_order_primitives: Set[JaxprPrimitive]) -> List[JaxprEqn]:
     """Topologically sort JaxPR equations in a unsorted list of equations, based on their
     input/output variables and additional criterias."""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (eqns=%s, forced_order_primitives=%s) called by %s",
-            eqns,
-            forced_order_primitives,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     # The procedure goes as follows: [1] - initialize the `origin` map mapping variable identifiers
     # to the origin Boxed equations, [2] - initialize `parents` fields of boxes with the
@@ -305,6 +266,7 @@ def sort_eqns(eqns: List[JaxprEqn], forced_order_primitives: Set[JaxprPrimitive]
     return [b.e for b in stable_toposort(boxes)]  # [4]
 
 
+@debug_logger
 def initial_style_jaxprs_with_common_consts1(
     funs: Sequence[Callable], in_tree, in_avals, primitive_name: str
 ):
@@ -313,16 +275,6 @@ def initial_style_jaxprs_with_common_consts1(
     same at the time of this writing, we use this function only to avoid conflicts with future
     versions of JAX.
     """
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (funs=%s, in_tree=%s, in_avals=%s, primitive_name=%s) called by %s",
-            funs,
-            in_tree,
-            in_avals,
-            primitive_name,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
-
     jaxprs, all_consts, all_out_trees = unzip3(
         _initial_style_open_jaxpr(fun, in_tree, in_avals, primitive_name) for fun in funs
     )
@@ -330,20 +282,13 @@ def initial_style_jaxprs_with_common_consts1(
     return closed_jaxprs, consts, all_out_trees
 
 
+@debug_logger
 def initial_style_jaxprs_with_common_consts2(jaxprs, all_consts):
     """This function is the tail (largest) part of the
     `lax.control_flow.common._initial_style_jaxprs_with_common_consts` of JAX. The JAX version
     traces argument Python functions in order to determine signatures to be unified. Here we rely on
     the fact that the tracing was already done elsewhere - and this is the only difference.
     """
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (jaxprs=%s, all_consts=%s) called by %s",
-            jaxprs,
-            all_consts,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     all_const_avals = [map(_abstractify, consts) for consts in all_consts]
     for consts_avals in all_const_avals:
@@ -394,19 +339,12 @@ def initial_style_jaxprs_with_common_consts2(jaxprs, all_consts):
     return closed_jaxprs, consts
 
 
+@debug_logger
 def deduce_avals(f: Callable, args, kwargs):
     """Wraps the callable ``f`` into a WrappedFun container accepting collapsed flatten arguments
     and returning expanded flatten results. Calculate input abstract values and output_tree promise.
     The promise must be called after the resulting wrapped function is evaluated."""
     # TODO: deprecate in favor of `deduce_signatures`
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (f=%s, args=%s, kwargs=%s) called by %s",
-            f,
-            args,
-            kwargs,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     flat_args, in_tree = tree_flatten((args, kwargs))
     abstracted_axes = None
@@ -419,33 +357,19 @@ def deduce_avals(f: Callable, args, kwargs):
     return wffa, in_avals, keep_inputs, out_tree_promise
 
 
+@debug_logger
 def new_inner_tracer(trace: DynamicJaxprTrace, aval) -> DynamicJaxprTracer:
     """Create a JAX tracer tracing an abstract value ``aval`, without specifying its source
     primitive."""
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (trace=%s, aval=%s) called by %s",
-            trace,
-            aval,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
-
     dt = DynamicJaxprTracer(trace, aval, jax_current())
     trace.frame.tracers.append(dt)
     trace.frame.tracer_to_var[id(dt)] = trace.frame.newvar(aval)
     return dt
 
 
+@debug_logger
 def get_implicit_and_explicit_flat_args(abstracted_axes, *args, **kwargs):
     """Get implicit arguments from explicit arguments and abstracted_axes."""
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (abstracted_axes=%s, args=%s, kwargs=%s) called by %s",
-            abstracted_axes,
-            args,
-            kwargs,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     axes_specs = _flat_axes_specs(abstracted_axes, *args, **kwargs)
     explicit_args, _ = tree_flatten(args)
@@ -455,21 +379,13 @@ def get_implicit_and_explicit_flat_args(abstracted_axes, *args, **kwargs):
     return args_flat
 
 
+@debug_logger
 def make_jaxpr2(
     fun: Callable,
     static_argnums: Any | None = None,
     abstracted_axes: Any | None = None,
 ) -> Callable[..., (tuple[ClosedJaxpr, PyTreeDef])]:
     """A customized version of ``jax.make_jaxpr``, compatible with the JAX dynamic API."""
-
-    if logger.isEnabledFor(logging.DEBUG):  # pragma: no cover
-        logger.debug(
-            "Entry with (fun=%s, static_argnums=%s, abstracted_axes=%s) called by %s",
-            fun,
-            static_argnums,
-            abstracted_axes,
-            "::L".join(str(i) for i in inspect.getouterframes(inspect.currentframe(), 2)[1][1:3]),
-        )
 
     def abstractify(args, kwargs):
         flat_args, in_tree = tree_flatten((args, kwargs))
