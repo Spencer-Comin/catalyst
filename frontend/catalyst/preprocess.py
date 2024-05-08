@@ -102,8 +102,10 @@ def decompose(
 
     new_ops = []
     for op in tape.operations:
-        if isinstance(op, MidMeasureMP):
-            raise CompileError("Must use 'measure' from Catalyst instead of PennyLane.")
+        if isinstance(op, (MidMeasureMP, qml.ops.op_math.Conditional)):
+            new_ops.append(op)
+            continue
+            # raise CompileError("Must use 'measure' from Catalyst instead of PennyLane.")
         new_ops.extend(
             op
             for op in _operator_decomposition_gen(

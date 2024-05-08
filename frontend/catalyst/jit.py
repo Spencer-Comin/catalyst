@@ -101,7 +101,7 @@ class QJIT:
             self.aot_compile()
 
     def __call__(self, *args, **kwargs):
-        # Transparantly call Python function in case of nested QJIT calls.
+        # Transparently call Python function in case of nested QJIT calls.
         if EvaluationContext.is_tracing():
             return self.user_function(*args, **kwargs)
 

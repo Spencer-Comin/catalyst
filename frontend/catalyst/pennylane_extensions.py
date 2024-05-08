@@ -23,7 +23,6 @@ import numbers
 from collections.abc import Sequence, Sized
 from functools import update_wrapper
 from typing import Any, Callable, Iterable, List, Optional, Union
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1125,6 +1124,11 @@ class MidCircuitMeasure(HybridOp):
 
     binder = qmeasure_p.bind
 
+    def __init__(self, *args, **kwargs):
+        self.postselect = kwargs.pop("postselect", None)
+        self.reset = kwargs.pop("reset", False)
+        super().__init__(*args, **kwargs)
+        
     def trace_quantum(self, ctx, device, trace, qrp) -> QRegPromise:
         op = self
         wire = op.in_classical_tracers[0]
@@ -2048,6 +2052,8 @@ def measure(
         in_classical_tracers=in_classical_tracers,
         out_classical_tracers=[m],
         regions=[],
+        postselect=postselect,
+        reset=reset,
     )
 
     # If reset was requested, reset qubit only if the measurement result was 1

@@ -522,9 +522,12 @@ def trace_observables(
         coeffs = jax.numpy.array(terms[0])
         nested_obs = trace_observables(terms[1][0], qrp, m_wires)[0]
         obs_tracers = hamiltonian_p.bind(coeffs, nested_obs)
+    elif "MidCircuitMeasure" in str(type(obs)):
+        qubits = qrp.extract(wires, allow_reuse=True)
+        obs_tracers = obs.out_classical_tracers[0]
     else:
         raise NotImplementedError(
-            f"Observable {obs} (of type {type(obs)}) is not impemented"
+            f"Observable {obs} (of type {type(obs)}) is not implemented"
         )  # pragma: no cover
     return obs_tracers, (len(qubits) if qubits else None)
 
@@ -612,14 +615,23 @@ def trace_quantum_measurements(
                 m_wires = o.wires if o.wires else range(device.num_wires)
             else:
                 m_wires = o.wires if o.wires else range(len(device.wires))
-
+        
+            # if "MidCircuitMeasure" in str(type(o)):
+            #     qubits = qrp.extract(m_wires, allow_reuse=True)
+            #     obs_tracers = o.out_classical_tracers
+            #     nqubits = (len(qubits) if qubits else None)
+            #     continue
+            
             obs_tracers, nqubits = trace_observables(o.obs, qrp, m_wires)
 
-            using_compbasis = obs_tracers.primitive == compbasis_p
+            using_compbasis = "MidCircuitMeasure" in str(type(o.obs)) or obs_tracers.primitive == compbasis_p
 
             if o.return_type.value == "sample":
-                shape = (shots, nqubits) if using_compbasis else (shots,)
-                out_classical_tracers.append(sample_p.bind(obs_tracers, shots=shots, shape=shape))
+                if "MidCircuitMeasure" in str(type(o.obs)):
+                    out_classical_tracers.extend(o.obs.out_classical_tracers)
+                else:
+                    shape = (shots, nqubits) if using_compbasis else (shots,)
+                    out_classical_tracers.append(sample_p.bind(obs_tracers, shots=shots, shape=shape))
             elif o.return_type.value == "expval":
                 out_classical_tracers.append(expval_p.bind(obs_tracers, shots=shots))
             elif o.return_type.value == "var":
@@ -648,7 +660,7 @@ def trace_quantum_measurements(
                 out_classical_tracers.append(state_p.bind(obs_tracers, shape=shape))
             else:
                 raise NotImplementedError(
-                    f"Measurement {o.return_type.value} is not impemented"
+                    f"Measurement {o.return_type.value} is not implemented"
                 )  # pragma: no cover
         elif isinstance(o, DynamicJaxprTracer):
             out_classical_tracers.append(o)
@@ -690,7 +702,7 @@ def is_transform_valid_for_batch_transforms(tape, flat_results):
         return isinstance(op, catalyst.pennylane_extensions.MidCircuitMeasure)
 
     is_valid_output = is_out_measurement_sequence or is_out_single_measurement
-    if not is_valid_output:
+    if False:#not is_valid_output:
         msg = (
             "A transformed quantum function must return either a single measurement, "
             "or a nonempty sequence of measurements."
@@ -879,40 +891,53 @@ def trace_quantum_function(
 
             qnode_transformed = len(qnode_program) > 0
             for i, tape in enumerate(tapes):
-                # If the program is batched, that means that it was transformed.
-                # If it was transformed, that means that the program might have
-                # changed the output. See `split_non_commuting`
-                if qnode_transformed:
-                    # TODO: In the future support arbitrary output from the user function.
-                    output = tape.measurements
-                    _, trees = jax.tree_util.tree_flatten(output, is_leaf=is_leaf)
-                else:
-                    output = return_values_flat
-                    trees = return_values_tree
-
-                qrp_out = trace_quantum_tape(tape, device, qreg_in, ctx, trace)
-                meas, meas_trees = trace_quantum_measurements(device, qrp_out, output, trees, tape)
-                qreg_out = qrp_out.actualize()
-
-                meas_tracers = [trace.full_raise(m) for m in meas]
-                meas_results = tree_unflatten(meas_trees, meas_tracers)
-
-                # TODO: Allow the user to return whatever types they specify.
-                if qnode_transformed:
-                    assert isinstance(meas_results, list)
-                    if len(meas_results) == 1:
-                        transformed_results.append(meas_results[0])
+                results = []
+                for s in tape.shots: # catalyst for loop
+                    aux_tape = qml.tape.QuantumScript(
+                        tape.operations,
+                        tape.measurements,
+                        shots=s,
+                        trainable_params=tape.trainable_params,
+                    )
+                    # If the program is batched, that means that it was transformed.
+                    # If it was transformed, that means that the program might have
+                    # changed the output. See `split_non_commuting`
+                    if qnode_transformed:
+                        # TODO: In the future support arbitrary output from the user function.
+                        output = aux_tape.measurements
+                        _, trees = jax.tree_util.tree_flatten(output, is_leaf=is_leaf)
                     else:
-                        transformed_results.append(tuple(meas_results))
-                else:
-                    transformed_results.append(meas_results)
+                        output = return_values_flat
+                        trees = return_values_tree
 
+                    qrp_out = trace_quantum_tape(aux_tape, device, qreg_in, ctx, trace)
+                    meas, meas_trees = trace_quantum_measurements(device, qrp_out, output, trees, aux_tape)
+                    qreg_out = qrp_out.actualize()
+
+                    meas_tracers = [trace.full_raise(m) for m in meas]
+                    meas_results = tree_unflatten(meas_trees, meas_tracers)
+
+                    # TODO: Allow the user to return whatever types they specify.
+                    if qnode_transformed:
+                        assert isinstance(meas_results, Sequence)
+                        if len(meas_results) == 1:
+                            results.append(meas_results[0])
+                        else:
+                            results.append(tuple(meas_results))
+                    else:
+                        results.append(meas_results)
+
+                    # Reset the qubits and update the register value for the next shots.
+                    for w in device.wires:
+                        qreg_out = reset_qubit(qreg_out, w)
+                    qreg_in = qreg_out
+
+                transformed_results.append(results)
                 # Reset the qubits and update the register value for the next tape.
                 if len(tapes) > 1 and i < len(tapes) - 1:
                     for w in device.wires:
                         qreg_out = reset_qubit(qreg_out, w)
                     qreg_in = qreg_out
-
             # Deallocate the register before tracing the post-processing.
             qdealloc_p.bind(qreg_out)
 
